@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS spans
 (
-  trace_id            String,
-  span_id             String,
-  parent_id           String,
+  trace_id            UInt64,
+  span_id             UInt64,
+  parent_id           Nullable(UInt64),
 
   service_name        LowCardinality(String),
   operation_name      LowCardinality(String),

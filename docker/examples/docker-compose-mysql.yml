@@ -22,21 +22,21 @@ services:
       - 3306:3306
 
   # Use MySQL instead of in-memory storage
-  zipkin:
-    extends:
-      file: docker-compose.yml
-      service: zipkin
-    # slim doesn't include MySQL support, so switch to the larger image
-    image: ghcr.io/openzipkin/zipkin:${TAG:-latest}
-    environment:
-      - STORAGE_TYPE=mysql
-      - MYSQL_HOST=storage
-      # Add the baked-in username and password for the zipkin-mysql image
-      - MYSQL_USER=zipkin
-      - MYSQL_PASS=zipkin
-    depends_on:
-      storage:
-        condition: service_healthy
+#  zipkin:
+#    extends:
+#      file: docker-compose.yml
+#      service: zipkin
+#    # slim doesn't include MySQL support, so switch to the larger image
+#    image: ghcr.io/openzipkin/zipkin:${TAG:-latest}
+#    environment:
+#      - STORAGE_TYPE=mysql
+#      - MYSQL_HOST=storage
+#      # Add the baked-in username and password for the zipkin-mysql image
+#      - MYSQL_USER=zipkin
+#      - MYSQL_PASS=zipkin
+#    depends_on:
+#      storage:
+#        condition: service_healthy
 
   dependencies:
     extends:

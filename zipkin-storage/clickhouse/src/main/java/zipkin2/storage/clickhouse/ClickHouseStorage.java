@@ -8,13 +8,12 @@ import zipkin2.storage.StorageComponent;
 
 public class ClickHouseStorage extends StorageComponent {
 
-  private final ClickHouseSpanConsumer clickHouseSpanConsumer;
   private final ClickHouseSpanStore clickHouseSpanStore;
   private final Client client;
   private final boolean ensureScheme;
+  private final String database;
 
   ClickHouseStorage(Builder b) {
-    this.clickHouseSpanConsumer = new ClickHouseSpanConsumer();
     this.clickHouseSpanStore = new ClickHouseSpanStore();
     this.client = new Client.Builder()
       .addEndpoint("http://" + b.host + ":" + b.port + "/")
@@ -22,6 +21,7 @@ public class ClickHouseStorage extends StorageComponent {
       .setPassword(b.password)
       .setDefaultDatabase(b.database)
       .build();
+    this.database = b.database;
     this.ensureScheme = b.ensureSchema;
     if (ensureScheme) {
       Schema.ensure(this, client);
@@ -35,7 +35,7 @@ public class ClickHouseStorage extends StorageComponent {
 
   @Override
   public SpanConsumer spanConsumer() {
-    return clickHouseSpanConsumer;
+    return new ClickHouseSpanConsumer(client, database);
   }
 
   public boolean isEnsureScheme() {
