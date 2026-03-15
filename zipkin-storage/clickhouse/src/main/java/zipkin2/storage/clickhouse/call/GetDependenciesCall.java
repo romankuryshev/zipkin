@@ -1,19 +1,18 @@
 package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
+import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
 import zipkin2.DependencyLink;
 import zipkin2.Span;
-import zipkin2.internal.DependencyLinker;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLink>> {
   private final long endTs;
   private final long lookback;
 
-  GetDependenciesCall(Client client, String database, long endTs, long lookback) {
+  public GetDependenciesCall(Client client, String database, long endTs, long lookback) {
     super(client, database);
     this.endTs = endTs;
     this.lookback = lookback;
@@ -22,14 +21,17 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
   @Override
   protected List<DependencyLink> doExecute() {
     String sql = "SELECT * FROM " + database + ".spans" +
-      " WHERE start_time >= toDateTime64(" + (endTs - lookback) * 1000 + ", 6)" +
-      " AND start_time <= toDateTime64(" + endTs * 1000 + ", 6)";
+      " WHERE start_time >= " + (endTs - lookback) +
+      " AND start_time <= " + endTs;
 
-    var queryResponse = client.query(sql).get();
-    List<List<Span>> traces = new ArrayList<>();
-    // TODO: Parse traces from result
-
-    return DependencyLinker.merge(traces);
+    QueryResponse response = null;
+    try {
+      response = client.query(sql).get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+    List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
+    return ClickHouseResultMapper.extractDependencies(spans);
   }
 
   @Override
@@ -39,6 +41,6 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
 
   @Override
   public String toString() {
-    return "GetDependenciesCall{endTs=" + endTs + ", lookback=" + lookback + "}";
+    return "GetDependenciesCall{endTs=" + endTs + ",lookback=" + lookback + "}";
   }
 }

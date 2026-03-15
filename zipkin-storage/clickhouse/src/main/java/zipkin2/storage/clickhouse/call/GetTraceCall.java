@@ -1,16 +1,16 @@
 package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
+import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
 import zipkin2.Span;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public final class GetTraceCall extends ClickHouseCall<List<Span>> {
   private final String traceId;
 
-  GetTraceCall(Client client, String database, String traceId) {
+  public GetTraceCall(Client client, String database, String traceId) {
     super(client, database);
     this.traceId = Span.normalizeTraceId(traceId);
   }
@@ -21,10 +21,14 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
       " WHERE trace_id = '" + escape(traceId) + "'" +
       " ORDER BY start_time ASC";
 
-    client.query(sql).executeAndWait();
-    List<Span> spans = new ArrayList<>();
-    // TODO: Parse result rows to Span objects
-    return spans;
+
+    QueryResponse response = null;
+    try {
+      response = client.query(sql).get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+    return ClickHouseResultMapper.toSpans(response, client);
   }
 
   @Override

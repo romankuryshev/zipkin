@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS spans
   remote_service_name LowCardinality(String),
   span_kind           LowCardinality(String),
 
-  start_time          DateTime64(6),
+  start_time          DateTime64(0),
   duration_us         UInt64,
 
   tags                Map(String, String),

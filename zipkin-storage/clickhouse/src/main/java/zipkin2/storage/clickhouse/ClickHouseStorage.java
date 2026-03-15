@@ -14,13 +14,13 @@ public class ClickHouseStorage extends StorageComponent {
   private final String database;
 
   ClickHouseStorage(Builder b) {
-    this.clickHouseSpanStore = new ClickHouseSpanStore();
     this.client = new Client.Builder()
       .addEndpoint("http://" + b.host + ":" + b.port + "/")
       .setUsername(b.username)
       .setPassword(b.password)
       .setDefaultDatabase(b.database)
       .build();
+    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database);
     this.database = b.database;
     this.ensureScheme = b.ensureSchema;
     if (ensureScheme) {

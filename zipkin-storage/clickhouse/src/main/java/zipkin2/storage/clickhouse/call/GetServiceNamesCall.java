@@ -1,14 +1,14 @@
 package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
+import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public final class GetServiceNamesCall extends ClickHouseCall<List<String>> {
 
-  GetServiceNamesCall(Client client, String database) {
+  public GetServiceNamesCall(Client client, String database) {
     super(client, database);
   }
 
@@ -18,10 +18,13 @@ public final class GetServiceNamesCall extends ClickHouseCall<List<String>> {
       " WHERE service_name != ''" +
       " ORDER BY service_name ASC";
 
-    client.query(sql).executeAndWait();
-    List<String> serviceNames = new ArrayList<>();
-    // TODO: Parse service names from result
-    return serviceNames;
+    QueryResponse response = null;
+    try {
+      response = client.query(sql).get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+    return ClickHouseResultMapper.toStringList(response, client, "service_name");
   }
 
   @Override

@@ -7,7 +7,7 @@ import zipkin2.Callback;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
-abstract class ClickHouseCall<V> extends Call.Base<V> {
+public abstract class ClickHouseCall<V> extends Call.Base<V> {
   protected final Client client;
   protected final String database;
   private static final Executor EXECUTOR = ForkJoinPool.commonPool();

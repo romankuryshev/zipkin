@@ -1,17 +1,17 @@
 package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
+import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
 import zipkin2.Span;
 import zipkin2.storage.QueryRequest;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   private final QueryRequest request;
 
-  GetTracesCall(Client client, String database, QueryRequest request) {
+  public GetTracesCall(Client client, String database, QueryRequest request) {
     super(client, database);
     this.request = request;
   }
@@ -20,8 +20,8 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   protected List<List<Span>> doExecute() {
     StringBuilder sql = new StringBuilder();
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE start_time >= toDateTime64(").append((request.endTs() - request.lookback()) * 1000).append(", 6)")
-      .append(" AND start_time <= toDateTime64(").append(request.endTs() * 1000).append(", 6)");
+      .append(" WHERE start_time >= ").append((request.endTs() - request.lookback()))
+      .append(" AND start_time <= ").append(request.endTs());
 
     if (request.serviceName() != null) {
       sql.append(" AND service_name = '").append(escape(request.serviceName())).append("'");
@@ -34,10 +34,14 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     sql.append(" ORDER BY start_time DESC")
       .append(" LIMIT ").append(request.limit() * 100);
 
-    var result = client.query(sql.toString()).executeAndWait();
-    List<List<Span>> traces = new ArrayList<>();
-    // TODO: Parse result rows and group by trace_id
-    return traces;
+    QueryResponse response = null;
+    try {
+      response = client.query(sql.toString()).get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+    List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
+    return ClickHouseResultMapper.groupSpansByTraceId(spans);
   }
 
   @Override

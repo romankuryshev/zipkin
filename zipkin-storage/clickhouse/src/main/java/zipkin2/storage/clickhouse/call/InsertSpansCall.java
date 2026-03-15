@@ -106,7 +106,6 @@ public final class InsertSpansCall extends Call<Void> {
       String spanKind = span.kind() != null ? span.kind().toString() : "";
       sb.append(quoteString(spanKind)).append(", ");
 
-      // start_time (DateTime64(6) - microseconds, ClickHouse stores as UInt64)
       long timestamp = span.timestampAsLong() > 0 ? span.timestampAsLong() : 0;
       sb.append(timestamp).append(", ");
 
