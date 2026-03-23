@@ -9,6 +9,7 @@ import zipkin2.Span;
 import zipkin2.internal.DependencyLinker;
 
 import java.math.BigInteger;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -146,6 +147,7 @@ public final class ClickHouseResultMapper {
     if (value instanceof Long) return (Long) value;
     if (value instanceof Integer) return ((Integer) value).longValue();
     if (value instanceof BigInteger) return ((BigInteger) value).longValue();
+    if (value instanceof ZonedDateTime) return ((ZonedDateTime) value).toInstant().toEpochMilli();
     if (value instanceof String) {
       try {
         return Long.parseLong((String) value);

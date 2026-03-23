@@ -19,9 +19,11 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   @Override
   protected List<List<Span>> doExecute() {
     StringBuilder sql = new StringBuilder();
+    long endTs = request.endTs() / 1000L;
+    long lookback = request.lookback() / 1000L;
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE start_time >= ").append((request.endTs() - request.lookback()))
-      .append(" AND start_time <= ").append(request.endTs());
+      .append(" WHERE start_time >= ").append((endTs - lookback))
+      .append(" AND start_time <= ").append(endTs);
 
     if (request.serviceName() != null) {
       sql.append(" AND service_name = '").append(escape(request.serviceName())).append("'");
@@ -38,6 +40,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     try {
       response = client.query(sql.toString()).get();
     } catch (InterruptedException | ExecutionException e) {
+      System.out.println(e);
       throw new RuntimeException(e);
     }
     List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
