@@ -1,9 +1,12 @@
 package zipkin2.storage.clickhouse;
 
 import com.clickhouse.client.api.Client;
+import zipkin2.storage.AutocompleteTags;
+import zipkin2.storage.ServiceAndSpanNames;
 import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.SpanStore;
 import zipkin2.storage.StorageComponent;
+import zipkin2.storage.Traces;
 
 
 public class ClickHouseStorage extends StorageComponent {
@@ -36,6 +39,21 @@ public class ClickHouseStorage extends StorageComponent {
   @Override
   public SpanConsumer spanConsumer() {
     return new ClickHouseSpanConsumer(client, database);
+  }
+
+  @Override
+  public Traces traces() {
+    return new ClickHouseTraces(client, database);
+  }
+
+  @Override
+  public ServiceAndSpanNames serviceAndSpanNames() {
+    return new ClickHouseServiceAndSpanNames(client, database);
+  }
+
+  @Override
+  public AutocompleteTags autocompleteTags() {
+    return new ClickHouseAutocompleteTags(client, database);
   }
 
   public boolean isEnsureScheme() {

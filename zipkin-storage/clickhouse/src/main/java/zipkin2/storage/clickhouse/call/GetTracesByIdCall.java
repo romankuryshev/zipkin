@@ -4,37 +4,35 @@ import com.clickhouse.client.api.Client;
 import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
 import zipkin2.Span;
-import zipkin2.storage.QueryRequest;
+
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
-  private final QueryRequest request;
+public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
 
-  public GetTracesCall(Client client, String database, QueryRequest request) {
+  private final Iterable<String> traceIds;
+
+  public GetTracesByIdCall(Client client, String database, Iterable<String> traceIds) {
     super(client, database);
-    this.request = request;
+    this.traceIds = traceIds;
   }
 
   @Override
   protected List<List<Span>> doExecute() {
     StringBuilder sql = new StringBuilder();
-    long endTs = request.endTs() / 1000L;
-    long lookback = request.lookback() / 1000L;
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE start_time >= ").append((endTs - lookback))
-      .append(" AND start_time <= ").append(endTs);
+      .append(" WHERE trace_id IN (");
 
-    if (request.serviceName() != null) {
-      sql.append(" AND service_name = '").append(escape(request.serviceName())).append("'");
+    var it = traceIds.iterator();
+    while (it.hasNext()) {
+      String traceId = it.next();
+      sql.append("'").append(escape(Span.normalizeTraceId(traceId))).append("'");
+      if (it.hasNext()) {
+        sql.append(",");
+      }
     }
-
-    if (request.spanName() != null) {
-      sql.append(" AND operation_name = '").append(escape(request.spanName())).append("'");
-    }
-
     sql.append(" ORDER BY start_time DESC")
-      .append(" LIMIT ").append(request.limit() * 100);
+      .append(" LIMIT ");
 
     QueryResponse response = null;
     try {
@@ -48,12 +46,12 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
 
   @Override
   public Call<List<List<Span>>> clone() {
-    return new GetTracesCall(client, database, request);
+    return new GetTracesByIdCall(client, database, traceIds);
   }
 
   @Override
   public String toString() {
-    return "GetTracesCall{limit=" + request.limit() + "}";
+    return "GetTracesByIdCall{traceIds=" + traceIds + "}";
   }
 
   private static String escape(String value) {
