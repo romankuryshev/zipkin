@@ -21,8 +21,8 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
   @Override
   protected List<DependencyLink> doExecute() {
     String sql = "SELECT * FROM " + database + ".spans" +
-      " WHERE start_time >= " + (endTs - lookback) +
-      " AND start_time <= " + endTs;
+      " WHERE start_time >= " + (endTs / 1000 - lookback / 1000) +
+      " AND start_time <= " + endTs / 1000;
 
     QueryResponse response = null;
     try {

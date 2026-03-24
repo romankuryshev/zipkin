@@ -110,6 +110,16 @@ export const TracePageContent = ({
               <SpanDetailDrawer
                 minTimestamp={minTimestamp}
                 span={selectedSpan}
+                spanStats={{
+                  medianDuration: 1500, // значения из API
+                  averageDuration: 1620,
+                  p50: 1500,
+                  p95: 2800,
+                  p99: 3500,
+                  successCount: 945,
+                  errorCount: 55,
+                  totalCount: 1000,
+                }}
               />
             )}
           </Box>

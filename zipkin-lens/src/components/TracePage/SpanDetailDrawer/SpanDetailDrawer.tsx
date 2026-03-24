@@ -7,6 +7,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AdjustedSpan } from '../../../models/AdjustedTrace';
 import { AnnotationViewer } from './AnnotationViewer';
+import { SpanStatistics } from './SpanStatistics';
 import { TagList } from './TagList';
 
 const useStyles = makeStyles((theme) => ({
@@ -31,11 +32,23 @@ const useStyles = makeStyles((theme) => ({
 type SpanDetailDrawerProps = {
   span: AdjustedSpan;
   minTimestamp: number;
+  // Данные для статистики (опционально)
+  spanStats?: {
+    medianDuration: number;
+    averageDuration: number;
+    p50: number;
+    p95: number;
+    p99: number;
+    successCount: number;
+    errorCount: number;
+    totalCount: number;
+  };
 };
 
 export const SpanDetailDrawer = ({
   span,
   minTimestamp,
+  spanStats,
 }: SpanDetailDrawerProps) => {
   const classes = useStyles();
   const { t } = useTranslation();
@@ -63,6 +76,25 @@ export const SpanDetailDrawer = ({
           </Grid>
         ))}
       </Grid>
+
+      {/* Span Statistics Section */}
+      {spanStats && (
+        <>
+          <Divider className={classes.divider} />
+          <SpanStatistics
+            spanName={span.spanName}
+            medianDuration={spanStats.medianDuration}
+            averageDuration={spanStats.averageDuration}
+            p50={spanStats.p50}
+            p95={spanStats.p95}
+            p99={spanStats.p99}
+            successCount={spanStats.successCount}
+            errorCount={spanStats.errorCount}
+            totalCount={spanStats.totalCount}
+          />
+        </>
+      )}
+
       {span.annotations.length > 0 && (
         <>
           <Divider className={classes.divider} />
