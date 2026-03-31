@@ -26,16 +26,22 @@ CREATE TABLE IF NOT EXISTS spans
                     ipv4 Nullable(IPv4),
                     ipv6 Nullable(IPv6),
                     port Nullable(UInt16)),
-  nested_endpoint Nested(service_name LowCardinality(String),
+  remote_endpoint Nested(service_name LowCardinality(String),
                     ipv4 Nullable(IPv4),
                     ipv6 Nullable(IPv6),
                     port Nullable(UInt16)),
-  Array           Nested(timestamp DateTime64(6),
-                    value String),
+  annotations     Array(Tuple(timestamp DateTime64(6), value String)),
   tags            Map(String, String),
   status_code     LowCardinality(String)
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
-    ORDER BY (trace_id, span_id)
+    ORDER BY (name, local_endpoint.service_name, remote_endpoint.service_name)
     SETTINGS index_granularity = 8192;
+
+ALTER TABLE spans
+  ADD PROJECTION spans_prj_service_name
+    (
+    SELECT *
+    ORDER BY (trace_id)
+    );
 
