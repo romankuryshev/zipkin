@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS spans
   status_code                  LowCardinality(String)
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
-    ORDER BY (name, local_endpoint_service_name)
+    ORDER BY (name, local_endpoint_service_name, kind)
     SETTINGS index_granularity = 8192;
 
 ALTER TABLE spans

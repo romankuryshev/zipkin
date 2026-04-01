@@ -3,13 +3,13 @@ package zipkin2.storage.clickhouse.call;
 import com.clickhouse.client.api.Client;
 import zipkin2.Call;
 import zipkin2.Span;
+import zipkin2.storage.clickhouse.dto.DependencyRecord;
+import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
+import zipkin2.storage.clickhouse.dto.SpanRecord;
 
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
 
-/**
- * Async call implementation for inserting spans into ClickHouse.
- * Uses ClickHouse Client v2 API: client.query(sql).execute().get()
- */
 public final class InsertSpansCall extends Call<Void> {
   private final Client client;
   private final String database;
@@ -26,22 +26,24 @@ public final class InsertSpansCall extends Call<Void> {
   @Override
   public Void execute() {
     try {
-      // 1. Insert into spans table
-      String spansInsert = buildSpansInsertStatement();
-      client.query(spansInsert).get();
-
-      // 2. Insert into service_operation_names table
-      String serviceOpsInsert = buildServiceOperationNamesInsertStatement();
-      if (!serviceOpsInsert.isEmpty()) {
-        client.query(serviceOpsInsert).get();
+      // 1. Convert Spans to SpanRecords and insert into spans table
+      List<SpanRecord> spanRecords = convertToSpanRecords();
+      if (!spanRecords.isEmpty()) {
+        client.insert("spans", spanRecords).get();
       }
 
-      // 3. Insert into dependencies table
-      String depsInsert = buildDependenciesInsertStatement();
-      if (!depsInsert.isEmpty()) {
-        client.query(depsInsert).get();
+      // 2. Extract and insert into service_operation_names table
+      List<ServiceOperationNameRecord> serviceOpsRecords = new ArrayList<>(extractServiceOperationNames());
+      if (!serviceOpsRecords.isEmpty()) {
+        client.insert("service_operation_names", serviceOpsRecords).get();
       }
-    } catch (Exception e) {
+
+      // 3. Extract and insert into dependencies table
+      List<DependencyRecord> depsRecords = new ArrayList<>(extractDependencies());
+      if (!depsRecords.isEmpty()) {
+        client.insert("dependencies", depsRecords).get();
+      }
+    } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }
 
@@ -78,124 +80,58 @@ public final class InsertSpansCall extends Call<Void> {
     return "InsertSpans{count=" + spans.size() + "}";
   }
 
-  private String buildSpansInsertStatement() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("INSERT INTO ").append(database).append(".spans ")
-      .append("(trace_id, trace_id_high, parent_id, span_id, kind, name, timestamp, duration, ")
-      .append("local_endpoint_service_name, local_endpoint_ipv4, local_endpoint_ipv6, local_endpoint_port, ")
-      .append("remote_endpoint_service_name, remote_endpoint_ipv4, remote_endpoint_ipv6, remote_endpoint_port, ")
-      .append("annotations, tags, status_code) ")
-      .append("VALUES ");
+  private List<SpanRecord> convertToSpanRecords() {
+    List<SpanRecord> records = new ArrayList<>();
 
-    for (int i = 0; i < spans.size(); i++) {
-      if (i > 0) sb.append(", ");
-
-      Span span = spans.get(i);
-      sb.append("(");
-
-      // Handle traceId splitting logic (same as Cassandra)
+    for (Span span : spans) {
       boolean traceIdHigh = !strictTraceId && span.traceId().length() == 32;
       String traceIdToUse = traceIdHigh ? span.traceId().substring(16) : span.traceId();
       String traceIdHighStr = traceIdHigh ? span.traceId().substring(0, 16) : null;
 
-      // trace_id (low 64 bits)
       long traceIdLow = parseHexStringToLong(traceIdToUse);
-      sb.append(traceIdLow).append(", ");
-
-      // trace_id_high (high 64 bits)
       long traceIdHighVal = traceIdHighStr != null ? parseHexStringToLong(traceIdHighStr) : 0L;
-      sb.append(traceIdHighVal).append(", ");
-
-      // parent_id
-      String parentId = span.parentId();
-      if (parentId != null && !parentId.isEmpty()) {
-        sb.append(parseHexStringToLong(parentId));
-      } else {
-        sb.append("NULL");
-      }
-      sb.append(", ");
-
-      // span_id
+      Long parentIdVal = span.parentId() != null && !span.parentId().isEmpty()
+        ? parseHexStringToLong(span.parentId())
+        : null;
       long spanId = parseHexStringToLong(span.id());
-      sb.append(spanId).append(", ");
 
-      // kind
-      String spanKind = span.kind() != null ? span.kind().toString() : "";
-      sb.append(quoteString(spanKind)).append(", ");
+      List<Object[]> annotations = buildAnnotationsList(span);
 
-      // name
-      sb.append(quoteString(span.name() != null ? span.name() : "")).append(", ");
-
-      // timestamp
-      long timestamp = span.timestampAsLong() > 0 ? span.timestampAsLong() : 0;
-      sb.append(timestamp).append(", ");
-
-      // duration
-      long duration = span.durationAsLong() > 0 ? span.durationAsLong() : 0;
-      sb.append(duration).append(", ");
-
-      // local_endpoint fields
-      if (span.localEndpoint() != null) {
-        String serviceName = span.localEndpoint().serviceName();
-        sb.append(quoteString(serviceName != null ? serviceName : "")).append(", ");
-
-        String ipv4 = span.localEndpoint().ipv4();
-        sb.append(quoteNullableString(ipv4)).append(", ");
-
-        String ipv6 = span.localEndpoint().ipv6();
-        sb.append(quoteNullableString(ipv6)).append(", ");
-
-        Integer port = span.localEndpoint().port();
-        if (port != null && port > 0) {
-          sb.append(port);
-        } else {
-          sb.append("NULL");
-        }
-      } else {
-        sb.append("'', NULL, NULL, NULL");
-      }
-      sb.append(", ");
-
-      // remote_endpoint fields
-      if (span.remoteEndpoint() != null) {
-        String serviceName = span.remoteEndpoint().serviceName();
-        sb.append(quoteString(serviceName != null ? serviceName : "")).append(", ");
-
-        String ipv4 = span.remoteEndpoint().ipv4();
-        sb.append(quoteNullableString(ipv4)).append(", ");
-
-        String ipv6 = span.remoteEndpoint().ipv6();
-        sb.append(quoteNullableString(ipv6)).append(", ");
-
-        Integer port = span.remoteEndpoint().port();
-        if (port != null && port > 0) {
-          sb.append(port);
-        } else {
-          sb.append("NULL");
-        }
-      } else {
-        sb.append("'', NULL, NULL, NULL");
-      }
-      sb.append(", ");
-
-      // annotations (Array)
-      sb.append(buildAnnotationsArray(span)).append(", ");
-
-      // tags (Map)
-      sb.append(buildTagsMap(span.tags())).append(", ");
-
-      // status_code
       String statusCode = span.tags().get("status.code");
-      sb.append(quoteNullableString(statusCode));
+      if (statusCode == null) {
+        statusCode = "";
+      }
 
-      sb.append(")");
+      SpanRecord record = new SpanRecord(
+        traceIdLow,
+        traceIdHighVal,
+        parentIdVal,
+        spanId,
+        span.kind() != null ? span.kind().toString() : "",
+        span.name() != null ? span.name() : "",
+        convertTimestampToInstant(span.timestampAsLong()),
+        span.durationAsLong() > 0 ? span.durationAsLong() : 0,
+        getLocalEndpointServiceName(span),
+        convertToInet4Address(span.localEndpoint() != null ? span.localEndpoint().ipv4() : null),
+        convertToInet6Address(span.localEndpoint() != null ? span.localEndpoint().ipv6() : null),
+        span.localEndpoint() != null ? span.localEndpoint().port() : null,
+        getRemoteEndpointServiceName(span),
+        convertToInet4Address(span.remoteEndpoint() != null ? span.remoteEndpoint().ipv4() : null),
+        convertToInet6Address(span.remoteEndpoint() != null ? span.remoteEndpoint().ipv6() : null),
+        span.remoteEndpoint() != null ? span.remoteEndpoint().port() : null,
+        annotations,
+        span.tags(),
+        statusCode
+      );
+
+      records.add(record);
     }
 
-    return sb.toString();
+    return records;
   }
 
-  private String buildServiceOperationNamesInsertStatement() {
-    java.util.Set<String> uniquePairs = new java.util.HashSet<>();
+  private Set<ServiceOperationNameRecord> extractServiceOperationNames() {
+    Set<ServiceOperationNameRecord> records = new HashSet<>();
 
     for (Span span : spans) {
       String serviceName = getServiceName(span);
@@ -203,33 +139,15 @@ public final class InsertSpansCall extends Call<Void> {
 
       if (serviceName != null && !serviceName.isEmpty() &&
           operationName != null && !operationName.isEmpty()) {
-        uniquePairs.add(serviceName + "|" + operationName);
+        records.add(new ServiceOperationNameRecord(serviceName, operationName));
       }
     }
 
-    if (uniquePairs.isEmpty()) {
-      return "";
-    }
-
-    StringBuilder sb = new StringBuilder();
-    sb.append("INSERT INTO ").append(database).append(".service_operation_names ")
-      .append("(service_name, operation_name) ")
-      .append("VALUES ");
-
-    boolean first = true;
-    for (String pair : uniquePairs) {
-      if (!first) sb.append(", ");
-      String[] parts = pair.split("\\|", 2);
-      sb.append("(").append(quoteString(parts[0])).append(", ")
-        .append(quoteString(parts[1])).append(")");
-      first = false;
-    }
-
-    return sb.toString();
+    return records;
   }
 
-  private String buildDependenciesInsertStatement() {
-    java.util.Set<String> uniqueDeps = new java.util.HashSet<>();
+  private Set<DependencyRecord> extractDependencies() {
+    Set<DependencyRecord> records = new HashSet<>();
 
     for (Span span : spans) {
       String localService = getServiceName(span);
@@ -241,29 +159,11 @@ public final class InsertSpansCall extends Call<Void> {
 
       if (localService != null && !localService.isEmpty() &&
           remoteService != null && !remoteService.isEmpty()) {
-        uniqueDeps.add(localService + "|" + remoteService);
+        records.add(new DependencyRecord(localService, remoteService));
       }
     }
 
-    if (uniqueDeps.isEmpty()) {
-      return "";
-    }
-
-    StringBuilder sb = new StringBuilder();
-    sb.append("INSERT INTO ").append(database).append(".dependencies ")
-      .append("(local_service_name, remote_service_name) ")
-      .append("VALUES ");
-
-    boolean first = true;
-    for (String dep : uniqueDeps) {
-      if (!first) sb.append(", ");
-      String[] parts = dep.split("\\|", 2);
-      sb.append("(").append(quoteString(parts[0])).append(", ")
-        .append(quoteString(parts[1])).append(")");
-      first = false;
-    }
-
-    return sb.toString();
+    return records;
   }
 
   private long parseHexStringToLong(String hexStr) {
@@ -275,41 +175,33 @@ public final class InsertSpansCall extends Call<Void> {
     }
   }
 
-  private String buildAnnotationsArray(Span span) {
+  private List<Object[]> buildAnnotationsList(Span span) {
     if (span.annotations() == null || span.annotations().isEmpty()) {
-      return "[]";
+      return Collections.emptyList();
     }
 
-    StringBuilder sb = new StringBuilder("[");
-    boolean first = true;
-
+    List<Object[]> annotations = new ArrayList<>();
     for (zipkin2.Annotation annotation : span.annotations()) {
-      if (!first) sb.append(", ");
-      sb.append("(").append(annotation.timestamp()).append(", ")
-        .append(quoteString(annotation.value())).append(")");
-      first = false;
+      Object[] tuple = new Object[2];
+      tuple[0] = convertTimestampToInstant(annotation.timestamp());
+      tuple[1] = annotation.value();
+      annotations.add(tuple);
     }
-
-    sb.append("]");
-    return sb.toString();
+    return annotations;
   }
 
-
-  private String buildTagsMap(java.util.Map<String, String> tags) {
-    if (tags.isEmpty()) return "{}";
-
-    StringBuilder sb = new StringBuilder("{");
-    boolean first = true;
-
-    for (java.util.Map.Entry<String, String> entry : tags.entrySet()) {
-      if (!first) sb.append(", ");
-      sb.append(quoteString(entry.getKey())).append(": ")
-        .append(quoteString(entry.getValue()));
-      first = false;
+  private String getLocalEndpointServiceName(Span span) {
+    if (span.localEndpoint() != null && span.localEndpoint().serviceName() != null) {
+      return span.localEndpoint().serviceName();
     }
+    return "";
+  }
 
-    sb.append("}");
-    return sb.toString();
+  private String getRemoteEndpointServiceName(Span span) {
+    if (span.remoteEndpoint() != null && span.remoteEndpoint().serviceName() != null) {
+      return span.remoteEndpoint().serviceName();
+    }
+    return "";
   }
 
   private String getServiceName(Span span) {
@@ -319,13 +211,35 @@ public final class InsertSpansCall extends Call<Void> {
     return span.tags().get("service");
   }
 
-  private String quoteString(String str) {
-    if (str == null) return "''";
-    return "'" + str.replace("'", "''") + "'";
+  private java.time.Instant convertTimestampToInstant(long timestampMicros) {
+    if (timestampMicros <= 0) {
+      return java.time.Instant.EPOCH;
+    }
+    // Конвертируем микросекунды в секунды и наносекунды
+    long seconds = timestampMicros / 1_000_000;
+    long nanos = (timestampMicros % 1_000_000) * 1_000;
+    return java.time.Instant.ofEpochSecond(seconds, nanos);
   }
 
-  private String quoteNullableString(String str) {
-    if (str == null || str.isEmpty()) return "NULL";
-    return quoteString(str);
+  private java.net.Inet4Address convertToInet4Address(String ipv4String) {
+    if (ipv4String == null || ipv4String.isEmpty()) {
+      return null;
+    }
+    try {
+      return (java.net.Inet4Address) java.net.InetAddress.getByName(ipv4String);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private java.net.Inet6Address convertToInet6Address(String ipv6String) {
+    if (ipv6String == null || ipv6String.isEmpty()) {
+      return null;
+    }
+    try {
+      return (java.net.Inet6Address) java.net.InetAddress.getByName(ipv6String);
+    } catch (Exception e) {
+      return null;
+    }
   }
 }

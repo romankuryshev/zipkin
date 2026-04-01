@@ -7,6 +7,9 @@ import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.SpanStore;
 import zipkin2.storage.StorageComponent;
 import zipkin2.storage.Traces;
+import zipkin2.storage.clickhouse.dto.DependencyRecord;
+import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
+import zipkin2.storage.clickhouse.dto.SpanRecord;
 
 
 public class ClickHouseStorage extends StorageComponent {
@@ -18,12 +21,7 @@ public class ClickHouseStorage extends StorageComponent {
   private final boolean strictTraceId;
 
   ClickHouseStorage(Builder b) {
-    this.client = new Client.Builder()
-      .addEndpoint("http://" + b.host + ":" + b.port + "/")
-      .setUsername(b.username)
-      .setPassword(b.password)
-      .setDefaultDatabase(b.database)
-      .build();
+    this.client = createClient(b);
     this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId);
     this.database = b.database;
     this.strictTraceId = b.strictTraceId;
@@ -68,6 +66,19 @@ public class ClickHouseStorage extends StorageComponent {
 
   public boolean isStrictTraceId() {
     return strictTraceId;
+  }
+
+  public Client createClient(Builder b) {
+    Client c = new Client.Builder()
+      .addEndpoint("http://" + b.host + ":" + b.port + "/")
+      .setUsername(b.username)
+      .setPassword(b.password)
+      .setDefaultDatabase(b.database)
+      .build();
+    c.register(SpanRecord.class, c.getTableSchema("spans"));
+    c.register(DependencyRecord.class, c.getTableSchema("dependencies"));
+    c.register(ServiceOperationNameRecord.class, c.getTableSchema("service_operation_names"));
+    return c;
   }
 
   public static class Builder {
