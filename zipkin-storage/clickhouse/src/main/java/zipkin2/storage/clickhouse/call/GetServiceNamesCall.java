@@ -14,8 +14,7 @@ public final class GetServiceNamesCall extends ClickHouseCall<List<String>> {
 
   @Override
   protected List<String> doExecute() {
-    String sql = "SELECT DISTINCT service_name FROM " + database + ".service_operation_names" +
-      " ORDER BY service_name ASC";
+    String sql = "SELECT DISTINCT service_name FROM " + database + ".service_operation_names ORDER BY service_name ASC";
 
     QueryResponse response = null;
     try {

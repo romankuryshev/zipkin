@@ -6,6 +6,7 @@ import zipkin2.Call;
 import zipkin2.Span;
 import zipkin2.storage.QueryRequest;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
@@ -18,19 +19,27 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
 
   @Override
   protected List<List<Span>> doExecute() {
-    StringBuilder sql = new StringBuilder();
     long endTs = request.endTs() / 1000L;
     long lookback = request.lookback() / 1000L;
+    long startTime = endTs - lookback;
+
+    StringBuilder sql = new StringBuilder();
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE timestamp >= ").append((endTs - lookback))
-      .append(" AND timestamp <= ").append(endTs);
+      .append(" WHERE timestamp >= {startTime:DateTime64}")
+      .append(" AND timestamp <= {endTime:DateTime64}");
+
+    Map<String, Object> queryParams = new java.util.HashMap<>();
+    queryParams.put("startTime", startTime);
+    queryParams.put("endTime", endTs);
 
     if (request.serviceName() != null) {
-      sql.append(" AND local_endpoint_service_name = '").append(escape(request.serviceName())).append("'");
+      sql.append(" AND local_endpoint_service_name = {serviceName:String}");
+      queryParams.put("serviceName", request.serviceName());
     }
 
     if (request.spanName() != null) {
-      sql.append(" AND name = '").append(escape(request.spanName())).append("'");
+      sql.append(" AND name = {spanName:String}");
+      queryParams.put("spanName", request.spanName());
     }
 
     sql.append(" ORDER BY timestamp DESC")
@@ -38,7 +47,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
 
     QueryResponse response = null;
     try {
-      response = client.query(sql.toString()).get();
+      response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

@@ -5,6 +5,7 @@ import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
 import zipkin2.Span;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -21,27 +22,29 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
   protected List<List<Span>> doExecute() {
     StringBuilder sql = new StringBuilder();
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE (trace_id, trace_id_high) IN (");
+      .append(" WHERE trace_id IN {trace_ids_list:Array(UInt64)}")
+      .append(" ORDER BY timestamp DESC");
 
+    List<Long> traceIdsList = new ArrayList<>();
     var it = traceIds.iterator();
+    traceIdsList.add(traceId(it.next()));
     while (it.hasNext()) {
-      String traceId = Span.normalizeTraceId(it.next());
-      long[] traceParts = parseTraceId(traceId);
-      sql.append("(").append(traceParts[0]).append(",").append(traceParts[1]).append(")");
-      if (it.hasNext()) {
-        sql.append(",");
-      }
+      traceIdsList.add(traceId(it.next()));
     }
-    sql.append(") ORDER BY timestamp DESC");
-
+    java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
+    queryParams.put("trace_ids_list", traceIdsList);
     QueryResponse response = null;
     try {
-      response = client.query(sql.toString()).get();
+      response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }
     List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
     return ClickHouseResultMapper.groupSpansByTraceId(spans);
+  }
+
+  public long traceId(String traceId) {
+    return parseTraceId(traceId)[0];
   }
 
   @Override

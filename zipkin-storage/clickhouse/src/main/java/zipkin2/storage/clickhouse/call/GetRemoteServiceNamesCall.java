@@ -17,13 +17,16 @@ public final class GetRemoteServiceNamesCall extends ClickHouseCall<List<String>
   @Override
   protected List<String> doExecute() {
     String sql = "SELECT DISTINCT remote_endpoint_service_name as service_name FROM " + database + ".spans" +
-      " WHERE local_endpoint_service_name = '" + escape(serviceName) + "'" +
+      " WHERE local_endpoint_service_name = {serviceName:String}" +
       " AND remote_endpoint_service_name != ''" +
       " ORDER BY service_name ASC";
 
+    java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
+    queryParams.put("serviceName", serviceName);
+
     QueryResponse response = null;
     try {
-      response = client.query(sql).get();
+      response = client.query(sql, queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

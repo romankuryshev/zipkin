@@ -17,17 +17,19 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
 
   @Override
   protected List<Span> doExecute() {
-    // Parse trace_id into low and high parts
     long[] traceParts = parseTraceId(traceId);
     String sql = "SELECT * FROM " + database + ".spans" +
-      " WHERE trace_id = " + traceParts[0] +
-      " AND trace_id_high = " + traceParts[1] +
+      " WHERE trace_id = {traceIdLow:UInt64}" +
+      " AND trace_id_high = {traceIdHigh:UInt64}" +
       " ORDER BY timestamp ASC";
 
+    java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
+    queryParams.put("traceIdLow", traceParts[0]);
+    queryParams.put("traceIdHigh", traceParts[1]);
 
     QueryResponse response = null;
     try {
-      response = client.query(sql).get();
+      response = client.query(sql, queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

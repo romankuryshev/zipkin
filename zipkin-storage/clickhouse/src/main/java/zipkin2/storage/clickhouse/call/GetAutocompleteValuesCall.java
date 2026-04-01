@@ -20,13 +20,16 @@ public final class GetAutocompleteValuesCall extends ClickHouseCall<List<String>
       throw new IllegalArgumentException("Tag key cannot be empty");
     }
 
-    String sql = "SELECT DISTINCT tags['" + escape(tagKey) + "'] as value FROM " + database + ".spans " +
-      "WHERE tags['" + escape(tagKey) + "'] != '' " +
+    String sql = "SELECT DISTINCT tags[{tagKey:String}] as value FROM " + database + ".spans " +
+      "WHERE tags[{tagKey:String}] != '' " +
       "ORDER BY value ASC";
+
+    java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
+    queryParams.put("tagKey", tagKey);
 
     QueryResponse response = null;
     try {
-      response = client.query(sql).get();
+      response = client.query(sql, queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

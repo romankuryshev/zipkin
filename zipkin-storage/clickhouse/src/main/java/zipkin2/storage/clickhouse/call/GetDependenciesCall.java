@@ -24,7 +24,7 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
 
     QueryResponse response = null;
     try {
-      response = client.query(sql).get();
+      response = client.query(sql, new java.util.HashMap<>(), new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

@@ -17,13 +17,16 @@ public final class GetSpanNamesCall extends ClickHouseCall<List<String>> {
   @Override
   protected List<String> doExecute() {
     String sql = "SELECT DISTINCT operation_name FROM " + database + ".service_operation_names" +
-      " WHERE service_name = '" + escape(serviceName) + "'" +
+      " WHERE service_name = {serviceName:String}" +
       " AND operation_name != ''" +
       " ORDER BY operation_name ASC";
 
+    java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
+    queryParams.put("serviceName", serviceName);
+
     QueryResponse response = null;
     try {
-      response = client.query(sql).get();
+      response = client.query(sql, queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }
