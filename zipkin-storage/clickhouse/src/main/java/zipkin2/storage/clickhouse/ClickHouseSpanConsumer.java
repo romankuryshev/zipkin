@@ -27,10 +27,12 @@ import java.util.List;
 public class ClickHouseSpanConsumer implements SpanConsumer {
   private final Client client;
   private final String database;
+  private final boolean strictTraceId;
 
-  public ClickHouseSpanConsumer(Client client, String database) {
+  public ClickHouseSpanConsumer(Client client, String database, boolean strictTraceId) {
     this.client = client;
     this.database = database;
+    this.strictTraceId = strictTraceId;
   }
 
   /**
@@ -44,7 +46,6 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
     if (spans.isEmpty()) {
       return Call.create(null);
     }
-
-    return new InsertSpansCall(client, database, spans);
+    return new InsertSpansCall(client, database, spans, strictTraceId);
   }
 }

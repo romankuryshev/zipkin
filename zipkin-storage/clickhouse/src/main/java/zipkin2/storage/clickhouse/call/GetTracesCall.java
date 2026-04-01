@@ -22,19 +22,19 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     long endTs = request.endTs() / 1000L;
     long lookback = request.lookback() / 1000L;
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE start_time >= ").append((endTs - lookback))
-      .append(" AND start_time <= ").append(endTs);
+      .append(" WHERE timestamp >= ").append((endTs - lookback))
+      .append(" AND timestamp <= ").append(endTs);
 
     if (request.serviceName() != null) {
-      sql.append(" AND service_name = '").append(escape(request.serviceName())).append("'");
+      sql.append(" AND local_endpoint_service_name = '").append(escape(request.serviceName())).append("'");
     }
 
     if (request.spanName() != null) {
-      sql.append(" AND operation_name = '").append(escape(request.spanName())).append("'");
+      sql.append(" AND name = '").append(escape(request.spanName())).append("'");
     }
 
-    sql.append(" ORDER BY start_time DESC")
-      .append(" LIMIT ").append(request.limit() * 100);
+    sql.append(" ORDER BY timestamp DESC")
+      .append(" LIMIT ").append(request.limit());
 
     QueryResponse response = null;
     try {

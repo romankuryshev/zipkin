@@ -16,7 +16,7 @@ public final class GetSpanNamesCall extends ClickHouseCall<List<String>> {
 
   @Override
   protected List<String> doExecute() {
-    String sql = "SELECT DISTINCT operation_name FROM " + database + ".spans" +
+    String sql = "SELECT DISTINCT operation_name FROM " + database + ".service_operation_names" +
       " WHERE service_name = '" + escape(serviceName) + "'" +
       " AND operation_name != ''" +
       " ORDER BY operation_name ASC";

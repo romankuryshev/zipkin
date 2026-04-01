@@ -14,10 +14,12 @@ public class ClickHouseSpanStore implements SpanStore {
 
   private final Client client;
   private final String database;
+  private final boolean strictTraceId;
 
-  public ClickHouseSpanStore(Client client, String database) {
+  public ClickHouseSpanStore(Client client, String database, boolean strictTraceId) {
     this.client = client;
     this.database = database;
+    this.strictTraceId = strictTraceId;
   }
 
   @Override
@@ -43,5 +45,9 @@ public class ClickHouseSpanStore implements SpanStore {
   @Override
   public Call<List<DependencyLink>> getDependencies(long endTs, long lookback) {
     return new GetDependenciesCall(client, database, endTs, lookback);
+  }
+
+  public boolean isStrictTraceId() {
+    return strictTraceId;
   }
 }

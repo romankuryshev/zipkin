@@ -20,9 +20,7 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
 
   @Override
   protected List<DependencyLink> doExecute() {
-    String sql = "SELECT * FROM " + database + ".spans" +
-      " WHERE start_time >= " + (endTs / 1000 - lookback / 1000) +
-      " AND start_time <= " + endTs / 1000;
+    String sql = "SELECT local_service_name, remote_service_name FROM " + database + ".dependencies";
 
     QueryResponse response = null;
     try {
@@ -30,8 +28,7 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }
-    List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
-    return ClickHouseResultMapper.extractDependencies(spans);
+    return ClickHouseResultMapper.toDependencyLinks(response, client);
   }
 
   @Override

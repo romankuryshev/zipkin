@@ -21,18 +21,18 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
   protected List<List<Span>> doExecute() {
     StringBuilder sql = new StringBuilder();
     sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE trace_id IN (");
+      .append(" WHERE (trace_id, trace_id_high) IN (");
 
     var it = traceIds.iterator();
     while (it.hasNext()) {
-      String traceId = it.next();
-      sql.append("'").append(escape(Span.normalizeTraceId(traceId))).append("'");
+      String traceId = Span.normalizeTraceId(it.next());
+      long[] traceParts = parseTraceId(traceId);
+      sql.append("(").append(traceParts[0]).append(",").append(traceParts[1]).append(")");
       if (it.hasNext()) {
         sql.append(",");
       }
     }
-    sql.append(" ORDER BY start_time DESC")
-      .append(" LIMIT ");
+    sql.append(") ORDER BY timestamp DESC");
 
     QueryResponse response = null;
     try {
@@ -52,6 +52,24 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
   @Override
   public String toString() {
     return "GetTracesByIdCall{traceIds=" + traceIds + "}";
+  }
+
+  private long[] parseTraceId(String hexTraceId) {
+    if (hexTraceId == null || hexTraceId.isEmpty()) {
+      return new long[]{0L, 0L};
+    }
+
+    try {
+      if (hexTraceId.length() <= 16) {
+        return new long[]{Long.parseUnsignedLong(hexTraceId, 16), 0L};
+      } else {
+        String high = hexTraceId.substring(0, hexTraceId.length() - 16);
+        String low = hexTraceId.substring(hexTraceId.length() - 16);
+        return new long[]{Long.parseUnsignedLong(low, 16), Long.parseUnsignedLong(high, 16)};
+      }
+    } catch (Exception e) {
+      return new long[]{0L, 0L};
+    }
   }
 
   private static String escape(String value) {

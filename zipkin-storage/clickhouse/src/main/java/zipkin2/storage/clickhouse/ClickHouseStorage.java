@@ -15,6 +15,7 @@ public class ClickHouseStorage extends StorageComponent {
   private final Client client;
   private final boolean ensureScheme;
   private final String database;
+  private final boolean strictTraceId;
 
   ClickHouseStorage(Builder b) {
     this.client = new Client.Builder()
@@ -23,11 +24,12 @@ public class ClickHouseStorage extends StorageComponent {
       .setPassword(b.password)
       .setDefaultDatabase(b.database)
       .build();
-    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database);
+    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId);
     this.database = b.database;
+    this.strictTraceId = b.strictTraceId;
     this.ensureScheme = b.ensureSchema;
     if (ensureScheme) {
-      Schema.ensure(this, client);
+      Schema.ensure(this);
     }
   }
 
@@ -38,7 +40,7 @@ public class ClickHouseStorage extends StorageComponent {
 
   @Override
   public SpanConsumer spanConsumer() {
-    return new ClickHouseSpanConsumer(client, database);
+    return new ClickHouseSpanConsumer(client, database, strictTraceId);
   }
 
   @Override
@@ -64,6 +66,10 @@ public class ClickHouseStorage extends StorageComponent {
     return client;
   }
 
+  public boolean isStrictTraceId() {
+    return strictTraceId;
+  }
+
   public static class Builder {
 
     private String host;
@@ -72,6 +78,7 @@ public class ClickHouseStorage extends StorageComponent {
     private boolean ensureSchema;
     private String username;
     private String password;
+    private boolean strictTraceId = true;
 
     public ClickHouseStorage build() {
       return new ClickHouseStorage(this);
@@ -104,6 +111,11 @@ public class ClickHouseStorage extends StorageComponent {
 
     public Builder setPassword(String password) {
       this.password = password;
+      return this;
+    }
+
+    public Builder setStrictTraceId(boolean strictTraceId) {
+      this.strictTraceId = strictTraceId;
       return this;
     }
   }

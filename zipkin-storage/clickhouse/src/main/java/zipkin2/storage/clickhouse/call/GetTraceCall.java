@@ -17,9 +17,12 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
 
   @Override
   protected List<Span> doExecute() {
+    // Parse trace_id into low and high parts
+    long[] traceParts = parseTraceId(traceId);
     String sql = "SELECT * FROM " + database + ".spans" +
-      " WHERE trace_id = '" + escape(traceId) + "'" +
-      " ORDER BY start_time ASC";
+      " WHERE trace_id = " + traceParts[0] +
+      " AND trace_id_high = " + traceParts[1] +
+      " ORDER BY timestamp ASC";
 
 
     QueryResponse response = null;
@@ -39,6 +42,24 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
   @Override
   public String toString() {
     return "GetTraceCall{traceId=" + traceId + "}";
+  }
+
+  private long[] parseTraceId(String hexTraceId) {
+    if (hexTraceId == null || hexTraceId.isEmpty()) {
+      return new long[]{0L, 0L};
+    }
+
+    try {
+      if (hexTraceId.length() <= 16) {
+        return new long[]{Long.parseUnsignedLong(hexTraceId, 16), 0L};
+      } else {
+        String high = hexTraceId.substring(0, hexTraceId.length() - 16);
+        String low = hexTraceId.substring(hexTraceId.length() - 16);
+        return new long[]{Long.parseUnsignedLong(low, 16), Long.parseUnsignedLong(high, 16)};
+      }
+    } catch (Exception e) {
+      return new long[]{0L, 0L};
+    }
   }
 
   private static String escape(String value) {

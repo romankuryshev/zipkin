@@ -16,10 +16,10 @@ public final class GetRemoteServiceNamesCall extends ClickHouseCall<List<String>
 
   @Override
   protected List<String> doExecute() {
-    String sql = "SELECT DISTINCT remote_service_name FROM " + database + ".spans" +
-      " WHERE service_name = '" + escape(serviceName) + "'" +
-      " AND remote_service_name != ''" +
-      " ORDER BY remote_service_name ASC";
+    String sql = "SELECT DISTINCT remote_endpoint_service_name as service_name FROM " + database + ".spans" +
+      " WHERE local_endpoint_service_name = '" + escape(serviceName) + "'" +
+      " AND remote_endpoint_service_name != ''" +
+      " ORDER BY service_name ASC";
 
     QueryResponse response = null;
     try {
@@ -27,7 +27,7 @@ public final class GetRemoteServiceNamesCall extends ClickHouseCall<List<String>
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }
-    return ClickHouseResultMapper.toStringList(response, client, "remote_service_name");
+    return ClickHouseResultMapper.toStringList(response, client, "service_name");
   }
 
   @Override
