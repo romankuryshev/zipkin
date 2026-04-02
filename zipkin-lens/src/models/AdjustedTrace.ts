@@ -15,6 +15,7 @@ export type AdjustedSpan = {
   spanId: string;
   spanName: string; // span.name or 'unknown' on null
   serviceName: string; // span.localEndpoint.serviceName or 'unknown' on null
+  kind?: 'CLIENT' | 'SERVER' | 'PRODUCER' | 'CONSUMER';
   parentId?: string;
   childIds: string[];
   serviceNames: string[];

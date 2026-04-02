@@ -31,6 +31,7 @@ public class ClickHouseStorage extends StorageComponent {
     if (ensureScheme) {
       Schema.ensure(this);
     }
+    registerTables();
   }
 
   @Override
@@ -83,10 +84,13 @@ public class ClickHouseStorage extends StorageComponent {
       .setPassword(b.password)
       .setDefaultDatabase(b.database)
       .build();
-    c.register(SpanRecord.class, c.getTableSchema("spans"));
-    c.register(DependencyRecord.class, c.getTableSchema("dependencies"));
-    c.register(ServiceOperationNameRecord.class, c.getTableSchema("service_operation_names"));
     return c;
+  }
+
+  public void registerTables() {
+    client.register(SpanRecord.class, client.getTableSchema("spans"));
+    client.register(DependencyRecord.class, client.getTableSchema("dependencies"));
+    client.register(ServiceOperationNameRecord.class, client.getTableSchema("service_operation_names"));
   }
 
   public static class Builder {

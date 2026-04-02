@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Box, Divider, Grid, makeStyles, Typography } from '@material-ui/core';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AdjustedSpan } from '../../../models/AdjustedTrace';
 import { AnnotationViewer } from './AnnotationViewer';
@@ -48,10 +48,45 @@ type SpanDetailDrawerProps = {
 export const SpanDetailDrawer = ({
   span,
   minTimestamp,
-  spanStats,
+  spanStats: initialSpanStats,
 }: SpanDetailDrawerProps) => {
   const classes = useStyles();
   const { t } = useTranslation();
+  const [spanStats, setSpanStats] = useState(initialSpanStats);
+  const [loading, setLoading] = useState(false);
+
+  // Загружать статистику при открытии drawer'а
+  useEffect(() => {
+    if (span && !initialSpanStats) {
+      setLoading(true);
+      const params = new URLSearchParams({
+        serviceName: span.serviceName,
+        spanName: span.spanName,
+        ...(span.kind && { spanKind: span.kind }),
+      });
+
+      fetch(`/api/v2/span-statistics?${params}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setSpanStats({
+            medianDuration: data.medianDuration,
+            averageDuration: data.averageDuration,
+            p50: data.p50,
+            p95: data.p95,
+            p99: data.p99,
+            successCount: data.successCount,
+            errorCount: data.errorCount,
+            totalCount: data.totalCount,
+          });
+        })
+        .catch((err) => {
+          console.error('Failed to load span statistics:', err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [span, initialSpanStats]);
 
   return (
     <Box className={classes.root}>

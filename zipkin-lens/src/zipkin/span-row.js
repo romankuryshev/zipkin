@@ -318,10 +318,16 @@ export function newSpanRow(spansToMerge, isLeafSpan) {
 
   let sharedTimestamp;
   let sharedDuration;
+  let spanKind;
   spansToMerge.forEach((next) => {
     if (next.parentId) res.parentId = next.parentId;
     if (next.name && (!res.spanName || next.kind === 'SERVER')) {
       res.spanName = next.name; // prefer the server's span name
+    }
+
+    // Capture the span kind, prefer SERVER kind
+    if (next.kind && (!spanKind || next.kind === 'SERVER')) {
+      spanKind = next.kind;
     }
 
     if (next.shared) {
@@ -371,6 +377,10 @@ export function newSpanRow(spansToMerge, isLeafSpan) {
   if (isNullOrUndefined(res.duration)) res.duration = 0;
   if (isNullOrUndefined(res.spanName)) res.spanName = 'unknown';
   if (isNullOrUndefined(res.serviceName)) res.serviceName = 'unknown';
+
+  // Add the span kind if it exists
+  if (spanKind) res.kind = spanKind;
+
   res.annotations.forEach((a) => {
     // eslint-disable-next-line no-param-reassign
     if (isNullOrUndefined(a.endpoint)) a.endpoint = 'unknown';

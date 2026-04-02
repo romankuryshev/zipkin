@@ -79,4 +79,27 @@ public interface SpanStore {
    * (endTs - lookback) in milliseconds.
    */
   Call<List<DependencyLink>> getDependencies(long endTs, long lookback);
+
+  /**
+   * Returns statistics about spans with a given service and span name.
+   *
+   * @param serviceName the service name to filter by
+   * @param spanName the span name to filter by
+   * @param spanKind optional span kind to filter by
+   * @param endTs only return statistics from spans where {@link Span#timestamp()} are at or before this
+   * time in epoch milliseconds.
+   * @param lookback only return statistics from spans where {@link Span#timestamp()} are at or after
+   * (endTs - lookback) in milliseconds.
+   * @return span statistics or empty/default statistics if no matching spans are found
+   */
+  default Call<SpanStatistics> getSpanStatistics(
+    String serviceName,
+    String spanName,
+    String spanKind,
+    long endTs,
+    long lookback) {
+    // Default implementation returns empty statistics for backward compatibility
+    return Call.create(new SpanStatistics(spanName, spanKind, 0, 0, 0, 0, 0, 0, 0, 0));
+  }
 }
+
