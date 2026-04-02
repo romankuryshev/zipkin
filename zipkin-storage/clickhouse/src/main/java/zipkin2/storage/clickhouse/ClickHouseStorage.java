@@ -15,6 +15,7 @@ import zipkin2.storage.clickhouse.dto.SpanRecord;
 public class ClickHouseStorage extends StorageComponent {
 
   private final ClickHouseSpanStore clickHouseSpanStore;
+  private final ClickHouseSpanConsumer spanConsumer;
   private final Client client;
   private final boolean ensureScheme;
   private final String database;
@@ -23,6 +24,7 @@ public class ClickHouseStorage extends StorageComponent {
   ClickHouseStorage(Builder b) {
     this.client = createClient(b);
     this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId);
+    this.spanConsumer = new ClickHouseSpanConsumer(client, b.database, b.strictTraceId);
     this.database = b.database;
     this.strictTraceId = b.strictTraceId;
     this.ensureScheme = b.ensureSchema;
@@ -38,7 +40,7 @@ public class ClickHouseStorage extends StorageComponent {
 
   @Override
   public SpanConsumer spanConsumer() {
-    return new ClickHouseSpanConsumer(client, database, strictTraceId);
+    return spanConsumer;
   }
 
   @Override
@@ -66,6 +68,12 @@ public class ClickHouseStorage extends StorageComponent {
 
   public boolean isStrictTraceId() {
     return strictTraceId;
+  }
+
+  public void close() {
+    if (spanConsumer != null) {
+      spanConsumer.close();
+    }
   }
 
   public Client createClient(Builder b) {
