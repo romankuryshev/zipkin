@@ -288,24 +288,36 @@ public class ZipkinQueryApiV2 {
       return "{}".getBytes();
     }
 
-    ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
-    try (JsonGenerator gen = JsonUtil.JSON_FACTORY.createGenerator((OutputStream) new ByteBufOutputStream(buf))) {
-      gen.writeStartObject();
-      gen.writeStringField("spanName", stats.spanName);
-      gen.writeStringField("spanKind", stats.spanKind);
-      gen.writeNumberField("medianDuration", stats.medianDuration);
-      gen.writeNumberField("averageDuration", stats.averageDuration);
-      gen.writeNumberField("p50", stats.p50);
-      gen.writeNumberField("p95", stats.p95);
-      gen.writeNumberField("p99", stats.p99);
-      gen.writeNumberField("successCount", stats.successCount);
-      gen.writeNumberField("errorCount", stats.errorCount);
-      gen.writeNumberField("totalCount", stats.totalCount);
-      gen.writeEndObject();
-    } catch (IOException e) {
+    try {
+      // Create a buffer to write JSON data
+      ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
+      ByteBufOutputStream outputStream = new ByteBufOutputStream(buf);
+      JsonGenerator gen = JsonUtil.JSON_FACTORY.createGenerator((OutputStream) outputStream);
+
+      try {
+        gen.writeStartObject();
+        gen.writeStringField("spanName", stats.spanName);
+        gen.writeStringField("spanKind", stats.spanKind);
+        gen.writeNumberField("medianDuration", stats.medianDuration);
+        gen.writeNumberField("averageDuration", stats.averageDuration);
+        gen.writeNumberField("p50", stats.p50);
+        gen.writeNumberField("p95", stats.p95);
+        gen.writeNumberField("p99", stats.p99);
+        gen.writeNumberField("successCount", stats.successCount);
+        gen.writeNumberField("errorCount", stats.errorCount);
+        gen.writeNumberField("totalCount", stats.totalCount);
+        gen.writeEndObject();
+        gen.flush();
+      } finally {
+        gen.close();
+      }
+
+      byte[] result = new byte[buf.readableBytes()];
+      buf.readBytes(result);
       buf.release();
+      return result;
+    } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
-    return buf.array();
   }
 }

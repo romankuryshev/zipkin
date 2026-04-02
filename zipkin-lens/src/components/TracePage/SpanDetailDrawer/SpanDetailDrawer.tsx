@@ -32,8 +32,15 @@ const useStyles = makeStyles((theme) => ({
 type SpanDetailDrawerProps = {
   span: AdjustedSpan;
   minTimestamp: number;
-  // Данные для статистики (опционально)
-  spanStats?: {
+};
+
+export const SpanDetailDrawer = ({
+  span,
+  minTimestamp,
+}: SpanDetailDrawerProps) => {
+  const classes = useStyles();
+  const { t } = useTranslation();
+  const [spanStats, setSpanStats] = useState<{
     medianDuration: number;
     averageDuration: number;
     p50: number;
@@ -42,22 +49,12 @@ type SpanDetailDrawerProps = {
     successCount: number;
     errorCount: number;
     totalCount: number;
-  };
-};
-
-export const SpanDetailDrawer = ({
-  span,
-  minTimestamp,
-  spanStats: initialSpanStats,
-}: SpanDetailDrawerProps) => {
-  const classes = useStyles();
-  const { t } = useTranslation();
-  const [spanStats, setSpanStats] = useState(initialSpanStats);
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Загружать статистику при открытии drawer'а
+  // Загружать статистику при открытии drawer'а или при изменении спана
   useEffect(() => {
-    if (span && !initialSpanStats) {
+    if (span) {
       setLoading(true);
       const params = new URLSearchParams({
         serviceName: span.serviceName,
@@ -65,28 +62,57 @@ export const SpanDetailDrawer = ({
         ...(span.kind && { spanKind: span.kind }),
       });
 
+      console.log('[SpanDetailDrawer] Loading statistics with params:', {
+        serviceName: span.serviceName,
+        spanName: span.spanName,
+        spanKind: span.kind,
+        url: `/api/v2/span-statistics?${params}`,
+      });
+
       fetch(`/api/v2/span-statistics?${params}`)
-        .then((res) => res.json())
+        .then((res) => {
+          console.log('[SpanDetailDrawer] Response status:', res.status);
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        })
         .then((data) => {
-          setSpanStats({
-            medianDuration: data.medianDuration,
-            averageDuration: data.averageDuration,
-            p50: data.p50,
-            p95: data.p95,
-            p99: data.p99,
-            successCount: data.successCount,
-            errorCount: data.errorCount,
-            totalCount: data.totalCount,
-          });
+          console.log('[SpanDetailDrawer] Loaded statistics:', data);
+          const stats = {
+            medianDuration: data.medianDuration ?? 0,
+            averageDuration: data.averageDuration ?? 0,
+            p50: data.p50 ?? 0,
+            p95: data.p95 ?? 0,
+            p99: data.p99 ?? 0,
+            successCount: data.successCount ?? 0,
+            errorCount: data.errorCount ?? 0,
+            totalCount: data.totalCount ?? 0,
+          };
+          setSpanStats(stats);
         })
         .catch((err) => {
-          console.error('Failed to load span statistics:', err);
+          console.error(
+            '[SpanDetailDrawer] Failed to load span statistics:',
+            err,
+          );
+          // Set default statistics on error
+          setSpanStats({
+            medianDuration: 0,
+            averageDuration: 0,
+            p50: 0,
+            p95: 0,
+            p99: 0,
+            successCount: 0,
+            errorCount: 0,
+            totalCount: 0,
+          });
         })
         .finally(() => {
           setLoading(false);
         });
     }
-  }, [span, initialSpanStats]);
+  }, [span.serviceName, span.spanName, span.kind]);
 
   return (
     <Box className={classes.root}>
@@ -113,7 +139,15 @@ export const SpanDetailDrawer = ({
       </Grid>
 
       {/* Span Statistics Section */}
-      {spanStats && (
+      {loading && (
+        <>
+          <Divider className={classes.divider} />
+          <Typography variant="caption" color="textSecondary">
+            Loading span statistics...
+          </Typography>
+        </>
+      )}
+      {!loading && spanStats && (
         <>
           <Divider className={classes.divider} />
           <SpanStatistics
