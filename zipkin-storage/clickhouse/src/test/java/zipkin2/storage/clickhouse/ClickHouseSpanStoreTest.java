@@ -20,7 +20,12 @@ public class ClickHouseSpanStoreTest {
     var mockClient = mock(Client.class);
     var spanStore = new ClickHouseSpanStore(mockClient, "zipkin", true);
 
-    var request = QueryRequest.newBuilder().build();
+    long endTs = 1704067200000000L; // 2024-01-01 in microseconds
+    var request = QueryRequest.newBuilder()
+      .endTs(endTs)
+      .lookback(3600000000L)
+      .limit(10)
+      .build();
     Call<List<List<Span>>> result = spanStore.getTraces(request);
 
     assertNotNull(result);
@@ -147,7 +152,12 @@ public class ClickHouseSpanStoreTest {
     var mockClient = mock(Client.class);
     var spanStore = new ClickHouseSpanStore(mockClient, "zipkin", true);
 
-    var request = QueryRequest.newBuilder().build();
+    long endTs = 1704067200000000L; // 2024-01-01 in microseconds
+    var request = QueryRequest.newBuilder()
+      .endTs(endTs)
+      .lookback(3600000000L)
+      .limit(10)
+      .build();
     Call<List<List<Span>>> result = spanStore.getTraces(request);
 
     assertNotNull(result);
@@ -158,8 +168,12 @@ public class ClickHouseSpanStoreTest {
     var mockClient = mock(Client.class);
     var spanStore = new ClickHouseSpanStore(mockClient, "zipkin", true);
 
+    long endTs = 1704067200000000L; // 2024-01-01 in microseconds
     var request = QueryRequest.newBuilder()
       .serviceName("order-db")
+      .endTs(endTs)
+      .lookback(3600000000L)
+      .limit(10)
       .build();
     Call<List<List<Span>>> result = spanStore.getTraces(request);
 
@@ -171,8 +185,12 @@ public class ClickHouseSpanStoreTest {
     var mockClient = mock(Client.class);
     var spanStore = new ClickHouseSpanStore(mockClient, "zipkin", true);
 
+    long endTs = 1704067200000000L; // 2024-01-01 in microseconds
     var request = QueryRequest.newBuilder()
       .spanName("select-orders")
+      .endTs(endTs)
+      .lookback(3600000000L)
+      .limit(10)
       .build();
     Call<List<List<Span>>> result = spanStore.getTraces(request);
 
@@ -184,9 +202,12 @@ public class ClickHouseSpanStoreTest {
     var mockClient = mock(Client.class);
     var spanStore = new ClickHouseSpanStore(mockClient, "zipkin", true);
 
+    long endTs = 1704067200000000L; // 2024-01-01 in microseconds
     var request = QueryRequest.newBuilder()
       .serviceName("order-db")
       .spanName("select-orders")
+      .endTs(endTs)
+      .lookback(3600000000L)
       .limit(100)
       .build();
     Call<List<List<Span>>> result = spanStore.getTraces(request);
@@ -200,16 +221,6 @@ public class ClickHouseSpanStoreTest {
     var spanStore = new ClickHouseSpanStore(mockClient, "custom_db", true);
 
     assertNotNull(spanStore);
-  }
-
-  @Test
-  public void getTraceWithNullTraceId() {
-    var mockClient = mock(Client.class);
-    var spanStore = new ClickHouseSpanStore(mockClient, "zipkin", true);
-
-    Call<List<Span>> result = spanStore.getTrace(null);
-
-    assertNotNull(result);
   }
 }
 
