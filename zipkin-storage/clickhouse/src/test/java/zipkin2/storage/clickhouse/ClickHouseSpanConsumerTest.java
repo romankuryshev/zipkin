@@ -80,12 +80,128 @@ public class ClickHouseSpanConsumerTest {
       consumer.close();
   }
 
+  @Test
+  public void acceptWithNullSpansList() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    try {
+      Call<Void> result = consumer.accept(null);
+      assertNotNull(result);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void acceptWithEmptySpansList() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    try {
+      Call<Void> result = consumer.accept(new ArrayList<>());
+      assertNotNull(result);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void acceptMultipleBatchesBelowThreshold() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    try {
+      consumer.accept(createTestSpans(3));
+      consumer.accept(createTestSpans(3));
+      consumer.accept(createTestSpans(2));
+
+      assertNotNull(consumer);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void acceptWithStrictTraceIdFalse() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", false);
+
+    try {
+      List<Span> spans = createTestSpans(5);
+      Call<Void> result = consumer.accept(spans);
+      assertNotNull(result);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void acceptWithDifferentDatabase() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "custom_db", true);
+
+    try {
+      List<Span> spans = createTestSpans(5);
+      Call<Void> result = consumer.accept(spans);
+      assertNotNull(result);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void acceptExactlyAtBatchThreshold() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    try {
+      List<Span> spans = createTestSpans(10);
+      Call<Void> result = consumer.accept(spans);
+      assertNotNull(result);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void acceptAboveBatchThreshold() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    try {
+      List<Span> spans = createTestSpans(15);
+      Call<Void> result = consumer.accept(spans);
+      assertNotNull(result);
+    } finally {
+      consumer.close();
+    }
+  }
+
+  @Test
+  public void multipleConsumersWithSameClient() {
+    var mockClient = mock(com.clickhouse.client.api.Client.class);
+    var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    var consumer2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    try {
+      consumer1.accept(createTestSpans(5));
+      consumer2.accept(createTestSpans(5));
+
+      assertNotNull(consumer1);
+      assertNotNull(consumer2);
+    } finally {
+      consumer1.close();
+      consumer2.close();
+    }
+  }
+
   private List<Span> createTestSpans(int count) {
     List<Span> spans = new ArrayList<>();
     for (int i = 0; i < count; i++) {
       Span span = Span.newBuilder()
         .traceId("0000000000000001")
-        .id(String.format("%016x", i))
+        .id(String.format("%016x", i + 1))
         .name("test-span-" + i)
         .timestamp(System.currentTimeMillis() * 1000)
         .duration(100)
