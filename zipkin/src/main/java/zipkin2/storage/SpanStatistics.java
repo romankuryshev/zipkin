@@ -1,5 +1,7 @@
 package zipkin2.storage;
 
+import java.util.Objects;
+
 /**
  * Statistics about spans with a given service and span name.
  */
@@ -27,6 +29,29 @@ public final class SpanStatistics {
     this.successCount = successCount;
     this.errorCount = errorCount;
     this.totalCount = totalCount;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    SpanStatistics that = (SpanStatistics) o;
+    return medianDuration == that.medianDuration &&
+        averageDuration == that.averageDuration &&
+        p50 == that.p50 &&
+        p95 == that.p95 &&
+        p99 == that.p99 &&
+        successCount == that.successCount &&
+        errorCount == that.errorCount &&
+        totalCount == that.totalCount &&
+        Objects.equals(spanName, that.spanName) &&
+        Objects.equals(spanKind, that.spanKind);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(spanName, spanKind, medianDuration, averageDuration, p50, p95, p99,
+        successCount, errorCount, totalCount);
   }
 
   @Override

@@ -21,9 +21,16 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
   @Override
   protected List<List<Span>> doExecute() {
     StringBuilder sql = new StringBuilder();
-    sql.append("SELECT * FROM ").append(database).append(".spans")
-      .append(" WHERE trace_id IN {trace_ids_list:Array(UInt64)}")
-      .append(" ORDER BY timestamp DESC");
+    sql.append("SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, ")
+      .append("s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, ")
+      .append("s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, ")
+      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, ")
+      .append("stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, ")
+      .append("stats.success_count, stats.error_count, stats.total_count ")
+      .append("FROM ").append(database).append(".spans s")
+      .append(ClickHouseResultMapper.getStatisticsJoinFragment(database))
+      .append(" WHERE s.trace_id IN {trace_ids_list:Array(UInt64)}")
+      .append(" ORDER BY s.timestamp DESC");
 
     List<Long> traceIdsList = new ArrayList<>();
     var it = traceIds.iterator();
@@ -33,14 +40,13 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
     }
     java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
     queryParams.put("trace_ids_list", traceIdsList);
-    QueryResponse response = null;
     try {
-      response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
+      QueryResponse response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
+      List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
+      return ClickHouseResultMapper.groupSpansByTraceId(spans);
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }
-    List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
-    return ClickHouseResultMapper.groupSpansByTraceId(spans);
   }
 
   public long traceId(String traceId) {
@@ -73,9 +79,5 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
     } catch (Exception e) {
       return new long[]{0L, 0L};
     }
-  }
-
-  private static String escape(String value) {
-    return value.replace("'", "\\'");
   }
 }

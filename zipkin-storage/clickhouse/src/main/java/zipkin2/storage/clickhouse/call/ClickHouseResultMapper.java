@@ -7,7 +7,7 @@ import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.DependencyLink;
 import zipkin2.Endpoint;
 import zipkin2.Span;
-import zipkin2.internal.DependencyLinker;
+import zipkin2.storage.SpanStatistics;
 
 import java.math.BigInteger;
 import java.net.Inet4Address;
@@ -23,6 +23,25 @@ import java.util.stream.Collectors;
 public final class ClickHouseResultMapper {
 
   private ClickHouseResultMapper() {}
+
+  /**
+   * Возвращает SQL фрагмент для LEFT JOIN с таблицей статистики
+   */
+  static String getStatisticsJoinFragment(String database) {
+    return " LEFT JOIN (SELECT span_name, span_kind, service_name, " +
+      "medianMerge(median_duration) AS median_duration, " +
+      "avgMerge(average_duration) AS average_duration, " +
+      "quantileMerge(p50) AS p50, " +
+      "quantileMerge(p95) AS p95, " +
+      "quantileMerge(p99) AS p99, " +
+      "sumMerge(success_count) AS success_count, " +
+      "sumMerge(error_count) AS error_count, " +
+      "sumMerge(total_count) AS total_count " +
+      "FROM " + database + ".spans_aggregate_stats " +
+      "GROUP BY span_name, span_kind, service_name) AS stats " +
+      "ON s.name = stats.span_name AND s.kind = stats.span_kind " +
+      "AND s.local_endpoint_service_name = stats.service_name";
+  }
 
   /**
    * Преобразует одну строку результата в объект Span
@@ -116,6 +135,34 @@ public final class ClickHouseResultMapper {
     String statusCode = (String) record.get("status_code");
     if (statusCode != null && !statusCode.isEmpty()) {
       builder.putTag("status.code", statusCode);
+    }
+
+    // Add statistics if available
+    Long medianDuration = getLong(record.get("median_duration"));
+    Long averageDuration = getLong(record.get("average_duration"));
+    Long p50 = getLong(record.get("p50"));
+    Long p95 = getLong(record.get("p95"));
+    Long p99 = getLong(record.get("p99"));
+    Long successCount = getLong(record.get("success_count"));
+    Long errorCount = getLong(record.get("error_count"));
+    Long totalCount = getLong(record.get("total_count"));
+
+    if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
+        p99 != null || successCount != null || errorCount != null || totalCount != null) {
+      String spanName = (String) record.get("name");
+      SpanStatistics stats = new SpanStatistics(
+        spanName,
+        spanKind != null ? spanKind : "",
+        medianDuration != null ? medianDuration : 0,
+        averageDuration != null ? averageDuration : 0,
+        p50 != null ? p50 : 0,
+        p95 != null ? p95 : 0,
+        p99 != null ? p99 : 0,
+        successCount != null ? successCount : 0,
+        errorCount != null ? errorCount : 0,
+        totalCount != null ? totalCount : 0
+      );
+      builder.statistics(stats);
     }
 
     @SuppressWarnings("unchecked")

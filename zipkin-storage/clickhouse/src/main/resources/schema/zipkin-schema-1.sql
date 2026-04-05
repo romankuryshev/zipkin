@@ -44,3 +44,35 @@ ALTER TABLE spans
     SELECT *
     ORDER BY (trace_id)
     );
+
+CREATE TABLE IF NOT EXISTS spans_aggregate_stats
+(
+  span_name        String,
+  span_kind        String,
+  service_name     String,
+  median_duration  AggregateFunction(median, UInt64),
+  average_duration AggregateFunction(avg, UInt64),
+  p50              AggregateFunction(quantiles(0.5), UInt64),
+  p95              AggregateFunction(quantiles(0.95), UInt64),
+  p99              AggregateFunction(quantiles(0.99), UInt64),
+  success_count    AggregateFunction(sum(), UInt64),
+  error_count      AggregateFunction(sum(), UInt64),
+  total_count      AggregateFunction(sum(), UInt64)
+) ENGINE = AggregatingMergeTree
+    ORDER BY (span_name, span_kind, service_name);
+
+CREATE MATERIALIZED VIEW spans_aggregate_mv TO spans_aggregate_stats AS
+SELECT name                                                    AS span_name,
+       kind                                                    AS span_kind,
+       local_endpoint_service_name                             AS service_name,
+       medianState(duration)                                   AS median_duration,
+       avgState(duration)                                      AS average_duration,
+       quantilesState(0.5)(duration)                           AS p50,
+       quantilesState(0.95)(duration)                          AS p95,
+       quantilesState(0.99)(duration)                          AS p99,
+       sumState(CAST(if(status_code = 'OK', 1, 0) AS UInt64))  AS success_count,
+       sumState(CAST(if(status_code != 'OK', 1, 0) AS UInt64)) AS error_count,
+       sumState(CAST(1 AS UInt64))                             AS total_count
+FROM spans
+GROUP BY name, span_kind, service_name
+ORDER BY name, span_kind, service_name;

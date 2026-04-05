@@ -21,6 +21,7 @@ import zipkin2.codec.SpanBytesDecoder;
 import zipkin2.codec.SpanBytesEncoder;
 import zipkin2.internal.Nullable;
 import zipkin2.internal.RecyclableBuffers;
+import zipkin2.storage.SpanStatistics;
 
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -266,6 +267,14 @@ public final class Span implements Serializable { // for Spark and Flink jobs
     return remoteEndpoint != null ? remoteEndpoint.serviceName() : null;
   }
 
+  /**
+   * Statistics about this span aggregated with other spans having the same service, name and kind.
+   * This is only populated by certain storage backends (e.g., ClickHouse).
+   */
+  @Nullable public SpanStatistics statistics() {
+    return statistics;
+  }
+
   public static Builder newBuilder() {
     return new Builder();
   }
@@ -283,6 +292,7 @@ public final class Span implements Serializable { // for Spark and Flink jobs
     ArrayList<Annotation> annotations;
     TreeMap<String, String> tags;
     int flags = 0; // bit field for timestamp and duration
+    SpanStatistics statistics;
 
     public Builder clear() {
       traceId = null;
@@ -297,6 +307,7 @@ public final class Span implements Serializable { // for Spark and Flink jobs
       if (annotations != null) annotations.clear();
       if (tags != null) tags.clear();
       flags = 0;
+      statistics = null;
       return this;
     }
 
@@ -340,6 +351,7 @@ public final class Span implements Serializable { // for Spark and Flink jobs
         tags.putAll(source.tags);
       }
       flags = source.flags;
+      statistics = source.statistics;
     }
 
     /**
@@ -583,6 +595,11 @@ public final class Span implements Serializable { // for Spark and Flink jobs
       return this;
     }
 
+    public Builder statistics(@Nullable SpanStatistics statistics) {
+      this.statistics = statistics;
+      return this;
+    }
+
     public Span build() {
       String missing = "";
       if (traceId == null) missing += " traceId";
@@ -723,6 +740,7 @@ public final class Span implements Serializable { // for Spark and Flink jobs
   final List<Annotation> annotations;
   final Map<String, String> tags;
   final int flags; // bit field for timestamp and duration, saving 2 object references
+  final SpanStatistics statistics;
 
   Span(Builder builder) {
     traceId = builder.traceId;
@@ -740,6 +758,7 @@ public final class Span implements Serializable { // for Spark and Flink jobs
       ? Collections.emptyMap()
       : new LinkedHashMap<>(builder.tags);
     flags = builder.flags;
+    statistics = builder.statistics;
   }
 
   @Override public boolean equals(Object o) {
@@ -757,7 +776,8 @@ public final class Span implements Serializable { // for Spark and Flink jobs
       && Objects.equals(remoteEndpoint, that.remoteEndpoint)
       && annotations.equals(that.annotations)
       && tags.equals(that.tags)
-      && flags == that.flags;
+      && flags == that.flags
+      && Objects.equals(statistics, that.statistics);
   }
 
   @Override public int hashCode() {
@@ -786,6 +806,8 @@ public final class Span implements Serializable { // for Spark and Flink jobs
     h ^= tags.hashCode();
     h *= 1000003;
     h ^= flags;
+    h *= 1000003;
+    h ^= (statistics == null) ? 0 : statistics.hashCode();
     return h;
   }
 
