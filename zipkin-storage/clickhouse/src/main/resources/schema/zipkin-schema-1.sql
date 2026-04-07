@@ -70,8 +70,8 @@ SELECT name                                                    AS span_name,
        quantilesState(0.5)(CAST(duration AS Float64))          AS p50,
        quantilesState(0.95)(CAST(duration AS Float64))         AS p95,
        quantilesState(0.99)(CAST(duration AS Float64))         AS p99,
-       sumState(CAST(if(status_code = 'OK', 1, 0) AS UInt64))  AS success_count,
-       sumState(CAST(if(status_code != 'OK', 1, 0) AS UInt64)) AS error_count,
+       sumState(CAST(if(status_code != 'ERROR', 1, 0) AS UInt64))  AS success_count,
+       sumState(CAST(if(status_code = 'ERROR', 1, 0) AS UInt64)) AS error_count,
        sumState(CAST(1 AS UInt64))                             AS total_count
 FROM spans
 GROUP BY name, span_kind, service_name
