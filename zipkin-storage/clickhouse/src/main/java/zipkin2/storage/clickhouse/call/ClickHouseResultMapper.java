@@ -9,6 +9,7 @@ import zipkin2.Endpoint;
 import zipkin2.Span;
 import zipkin2.storage.SpanStatistics;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -138,11 +139,11 @@ public final class ClickHouseResultMapper {
     }
 
     // Add statistics if available
-    Long medianDuration = getLong(record.get("median_duration"));
-    Long averageDuration = getLong(record.get("average_duration"));
-    Long p50 = getLong(record.get("p50"));
-    Long p95 = getLong(record.get("p95"));
-    Long p99 = getLong(record.get("p99"));
+    BigDecimal medianDuration = getBigDecimal(record.get("median_duration"));
+    BigDecimal averageDuration = getBigDecimal(record.get("average_duration"));
+    BigDecimal p50 = getBigDecimal(record.get("p50"));
+    BigDecimal p95 = getBigDecimal(record.get("p95"));
+    BigDecimal p99 = getBigDecimal(record.get("p99"));
     Long successCount = getLong(record.get("success_count"));
     Long errorCount = getLong(record.get("error_count"));
     Long totalCount = getLong(record.get("total_count"));
@@ -153,14 +154,14 @@ public final class ClickHouseResultMapper {
       SpanStatistics stats = new SpanStatistics(
         spanName,
         spanKind != null ? spanKind : "",
-        medianDuration != null ? medianDuration : 0,
-        averageDuration != null ? averageDuration : 0,
-        p50 != null ? p50 : 0,
-        p95 != null ? p95 : 0,
-        p99 != null ? p99 : 0,
-        successCount != null ? successCount : 0,
-        errorCount != null ? errorCount : 0,
-        totalCount != null ? totalCount : 0
+        medianDuration != null ? medianDuration : BigDecimal.ZERO,
+        averageDuration != null ? averageDuration : BigDecimal.ZERO,
+        p50 != null ? p50 : BigDecimal.ZERO,
+        p95 != null ? p95 : BigDecimal.ZERO,
+        p99 != null ? p99 : BigDecimal.ZERO,
+        successCount != null ? successCount : 0L,
+        errorCount != null ? errorCount : 0L,
+        totalCount != null ? totalCount : 0L
       );
       builder.statistics(stats);
     }
@@ -290,6 +291,24 @@ public final class ClickHouseResultMapper {
     return null;
   }
 
+  private static BigDecimal getBigDecimal(Object value) {
+    if (value == null) return null;
+    if (value instanceof BigDecimal) return (BigDecimal) value;
+    if (value instanceof Double) return BigDecimal.valueOf((Double) value);
+    if (value instanceof Float) return BigDecimal.valueOf((Float) value);
+    if (value instanceof Long) return BigDecimal.valueOf((Long) value);
+    if (value instanceof Integer) return BigDecimal.valueOf((Integer) value);
+    if (value instanceof BigInteger) return new BigDecimal((BigInteger) value);
+    if (value instanceof String) {
+      try {
+        return new BigDecimal((String) value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   private static Integer getInteger(Object value) {
     if (value == null) return null;
     if (value instanceof Integer) return (Integer) value;
@@ -304,3 +323,4 @@ public final class ClickHouseResultMapper {
     return null;
   }
 }
+

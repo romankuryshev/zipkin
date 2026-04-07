@@ -9,6 +9,7 @@ import java.util.Map;
 import zipkin2.Annotation;
 import zipkin2.Endpoint;
 import zipkin2.Span;
+import zipkin2.storage.SpanStatistics;
 
 import static zipkin2.internal.JsonEscaper.jsonEscape;
 import static zipkin2.internal.JsonEscaper.jsonEscapedSizeInBytes;
@@ -71,6 +72,9 @@ public final class V2SpanWriter implements WriteBuffer.Writer<Span> {
     }
     if (Boolean.TRUE.equals(value.shared())) {
       sizeInBytes += 14; // ,"shared":true
+    }
+    if (value.statistics() != null) {
+      sizeInBytes += statisticsSizeInBytes(value.statistics());
     }
     return ++sizeInBytes; // }
   }
@@ -142,6 +146,9 @@ public final class V2SpanWriter implements WriteBuffer.Writer<Span> {
     }
     if (Boolean.TRUE.equals(value.shared())) {
       b.writeAscii(",\"shared\":true");
+    }
+    if (value.statistics() != null) {
+      writeStatistics(value.statistics(), b);
     }
     b.writeByte('}');
   }
@@ -233,6 +240,57 @@ public final class V2SpanWriter implements WriteBuffer.Writer<Span> {
       b.writeAscii(",\"endpoint\":");
       b.write(endpoint);
     }
+    b.writeByte('}');
+  }
+
+  static int statisticsSizeInBytes(SpanStatistics stats) {
+    int sizeInBytes = 15; // ,"statistics":{
+    sizeInBytes += 12; // "spanName":"
+    sizeInBytes += jsonEscapedSizeInBytes(stats.spanName);
+    sizeInBytes += 14; // ","spanKind":"
+    sizeInBytes += jsonEscapedSizeInBytes(stats.spanKind);
+    sizeInBytes += 19; // ","medianDuration":
+    sizeInBytes += stats.medianDuration.toPlainString().length();
+    sizeInBytes += 19; // ,"averageDuration":
+    sizeInBytes += stats.averageDuration.toPlainString().length();
+    sizeInBytes += 7; // ,"p50":
+    sizeInBytes += stats.p50.toPlainString().length();
+    sizeInBytes += 7; // ,"p95":
+    sizeInBytes += stats.p95.toPlainString().length();
+    sizeInBytes += 7; // ,"p99":
+    sizeInBytes += stats.p99.toPlainString().length();
+    sizeInBytes += 16; // ,"successCount":
+    sizeInBytes += asciiSizeInBytes(stats.successCount);
+    sizeInBytes += 14; // ,"errorCount":
+    sizeInBytes += asciiSizeInBytes(stats.errorCount);
+    sizeInBytes += 14; // ,"totalCount":
+    sizeInBytes += asciiSizeInBytes(stats.totalCount);
+    sizeInBytes += 1; // }
+    return sizeInBytes;
+  }
+
+  static void writeStatistics(SpanStatistics stats, WriteBuffer b) {
+    b.writeAscii(",\"statistics\":{");
+    b.writeAscii("\"spanName\":\"");
+    b.writeUtf8(jsonEscape(stats.spanName));
+    b.writeAscii("\",\"spanKind\":\"");
+    b.writeUtf8(jsonEscape(stats.spanKind));
+    b.writeAscii("\",\"medianDuration\":");
+    b.writeAscii(stats.medianDuration.toPlainString());
+    b.writeAscii(",\"averageDuration\":");
+    b.writeAscii(stats.averageDuration.toPlainString());
+    b.writeAscii(",\"p50\":");
+    b.writeAscii(stats.p50.toPlainString());
+    b.writeAscii(",\"p95\":");
+    b.writeAscii(stats.p95.toPlainString());
+    b.writeAscii(",\"p99\":");
+    b.writeAscii(stats.p99.toPlainString());
+    b.writeAscii(",\"successCount\":");
+    b.writeAscii(stats.successCount);
+    b.writeAscii(",\"errorCount\":");
+    b.writeAscii(stats.errorCount);
+    b.writeAscii(",\"totalCount\":");
+    b.writeAscii(stats.totalCount);
     b.writeByte('}');
   }
 }

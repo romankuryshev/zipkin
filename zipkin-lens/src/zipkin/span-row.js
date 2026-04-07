@@ -366,9 +366,14 @@ export function newSpanRow(spansToMerge, isLeafSpan) {
     res.errorType = getErrorType(next, res.errorType);
 
     if (next.debug) res.debug = true;
+
+    // Capture statistics from the span
+    if (next.statistics && !res.statistics) {
+      res.statistics = next.statistics;
+    }
   });
 
-  // timestamp is used to derive positional data later
+  // ...existing code...
   if (!res.timestamp && sharedTimestamp) res.timestamp = sharedTimestamp;
   // duration is used for deriving data, and also for the zoom function
   if (!res.duration && sharedDuration) res.duration = sharedDuration;

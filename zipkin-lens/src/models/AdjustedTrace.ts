@@ -31,6 +31,18 @@ export type AdjustedSpan = {
   depth: number;
   width: number;
   left: number;
+  statistics?: {
+    spanName: string;
+    spanKind: string;
+    medianDuration: number | string;
+    averageDuration: number | string;
+    p50: number | string;
+    p95: number | string;
+    p99: number | string;
+    successCount: number | string;
+    errorCount: number | string;
+    totalCount: number | string;
+  };
 };
 
 type AdjustedTrace = {

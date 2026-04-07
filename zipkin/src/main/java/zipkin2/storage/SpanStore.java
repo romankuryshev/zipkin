@@ -4,6 +4,7 @@
  */
 package zipkin2.storage;
 
+import java.math.BigDecimal;
 import java.util.List;
 import zipkin2.Call;
 import zipkin2.DependencyLink;
@@ -99,7 +100,7 @@ public interface SpanStore {
     long endTs,
     long lookback) {
     // Default implementation returns empty statistics for backward compatibility
-    return Call.create(new SpanStatistics(spanName, spanKind, 0, 0, 0, 0, 0, 0, 0, 0));
+    return Call.create(new SpanStatistics(spanName, spanKind, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, 0));
   }
 }
 

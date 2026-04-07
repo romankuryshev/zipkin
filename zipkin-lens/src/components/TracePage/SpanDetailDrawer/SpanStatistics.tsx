@@ -85,24 +85,26 @@ const useStyles = makeStyles<Theme>((theme) => ({
 
 type SpanStatisticsProps = {
   spanName: string;
-  medianDuration: number; // в микросекундах
-  averageDuration: number;
-  p50: number;
-  p95: number;
-  p99: number;
-  successCount: number;
-  errorCount: number;
-  totalCount: number;
+  medianDuration: number | string; // в микросекундах, может быть строкой из JSON
+  averageDuration: number | string;
+  p50: number | string;
+  p95: number | string;
+  p99: number | string;
+  successCount: number | string;
+  errorCount: number | string;
+  totalCount: number | string;
 };
 
 // Утилита для форматирования времени
-const formatDuration = (microseconds: number): string => {
-  if (microseconds < 1000) {
-    return `${Math.round(microseconds)} μs`;
-  } else if (microseconds < 1000000) {
-    return `${(microseconds / 1000).toFixed(2)} ms`;
+const formatDuration = (microseconds: number | string): string => {
+  const value =
+    typeof microseconds === 'string' ? parseFloat(microseconds) : microseconds;
+  if (value < 1000) {
+    return `${Math.round(value)} μs`;
+  } else if (value < 1000000) {
+    return `${(value / 1000).toFixed(2)} ms`;
   } else {
-    return `${(microseconds / 1000000).toFixed(2)} s`;
+    return `${(value / 1000000).toFixed(2)} s`;
   }
 };
 
@@ -120,8 +122,19 @@ export const SpanStatistics = ({
   const classes = useStyles();
   const [open, toggleOpen] = useToggle(true);
 
-  const successRate = totalCount > 0 ? (successCount / totalCount) * 100 : 0;
-  const errorRate = totalCount > 0 ? (errorCount / totalCount) * 100 : 0;
+  const totalCountNum =
+    typeof totalCount === 'string' ? parseInt(totalCount, 10) : totalCount;
+  const successCountNum =
+    typeof successCount === 'string'
+      ? parseInt(successCount, 10)
+      : successCount;
+  const errorCountNum =
+    typeof errorCount === 'string' ? parseInt(errorCount, 10) : errorCount;
+
+  const successRate =
+    totalCountNum > 0 ? (successCountNum / totalCountNum) * 100 : 0;
+  const errorRate =
+    totalCountNum > 0 ? (errorCountNum / totalCountNum) * 100 : 0;
 
   return (
     <Box>
@@ -197,7 +210,7 @@ export const SpanStatistics = ({
                   />
                 </Box>
                 <Typography variant="caption" color="textSecondary">
-                  {successCount}
+                  {successCountNum}
                 </Typography>
               </Box>
               <Box display="flex" alignItems="center">
@@ -212,13 +225,13 @@ export const SpanStatistics = ({
                   />
                 </Box>
                 <Typography variant="caption" color="textSecondary">
-                  {errorCount}
+                  {errorCountNum}
                 </Typography>
               </Box>
             </Box>
             <Box mt={1}>
               <Typography variant="caption" color="textSecondary">
-                Total: {totalCount} spans
+                Total: {totalCountNum} spans
               </Typography>
             </Box>
           </Box>

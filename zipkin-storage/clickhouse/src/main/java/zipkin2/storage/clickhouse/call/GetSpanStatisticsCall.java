@@ -6,6 +6,8 @@ import zipkin2.storage.SpanStatistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+
 public final class GetSpanStatisticsCall extends Call<SpanStatistics> {
   private static final Logger log = LoggerFactory.getLogger(GetSpanStatisticsCall.class);
 
@@ -40,11 +42,11 @@ public final class GetSpanStatisticsCall extends Call<SpanStatistics> {
       return new SpanStatistics(
           spanName,
           spanKind,
-          0,
-          0,
-          0,
-          0,
-          0,
+          BigDecimal.ZERO,
+          BigDecimal.ZERO,
+          BigDecimal.ZERO,
+          BigDecimal.ZERO,
+          BigDecimal.ZERO,
           0,
           0,
           0
