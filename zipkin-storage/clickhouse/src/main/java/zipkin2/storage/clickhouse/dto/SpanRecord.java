@@ -1,20 +1,18 @@
 package zipkin2.storage.clickhouse.dto;
 
+import java.math.BigInteger;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-/**
- * DTO for spans table in ClickHouse.
- * Maps to table structure with all columns.
- */
+
 public class SpanRecord {
-  private long traceId;
-  private long traceIdHigh;
-  private Long parentId;
-  private long spanId;
+  private BigInteger traceId;
+  private BigInteger traceIdHigh;
+  private BigInteger parentId;
+  private BigInteger spanId;
   private String kind;
   private String name;
   private Instant timestamp;
@@ -34,7 +32,7 @@ public class SpanRecord {
   public SpanRecord() {
   }
 
-  public SpanRecord(long traceId, long traceIdHigh, Long parentId, long spanId,
+  public SpanRecord(BigInteger traceId, BigInteger traceIdHigh, BigInteger parentId, BigInteger spanId,
                     String kind, String name, Instant timestamp, long duration,
                     String localEndpointServiceName, Inet4Address localEndpointIpv4,
                     Inet6Address localEndpointIpv6, Integer localEndpointPort,
@@ -63,15 +61,14 @@ public class SpanRecord {
     this.statusCode = statusCode;
   }
 
-  // Getters and Setters
-  public long getTraceId() { return traceId; }
-  public void setTraceId(long traceId) { this.traceId = traceId; }
-  public long getTraceIdHigh() { return traceIdHigh; }
-  public void setTraceIdHigh(long traceIdHigh) { this.traceIdHigh = traceIdHigh; }
-  public Long getParentId() { return parentId; }
-  public void setParentId(Long parentId) { this.parentId = parentId; }
-  public long getSpanId() { return spanId; }
-  public void setSpanId(long spanId) { this.spanId = spanId; }
+  public BigInteger getTraceId() { return traceId; }
+  public void setTraceId(BigInteger traceId) { this.traceId = traceId; }
+  public BigInteger getTraceIdHigh() { return traceIdHigh; }
+  public void setTraceIdHigh(BigInteger traceIdHigh) { this.traceIdHigh = traceIdHigh; }
+  public BigInteger getParentId() { return parentId; }
+  public void setParentId(BigInteger parentId) { this.parentId = parentId; }
+  public BigInteger getSpanId() { return spanId; }
+  public void setSpanId(BigInteger spanId) { this.spanId = spanId; }
   public String getKind() { return kind; }
   public void setKind(String kind) { this.kind = kind; }
   public String getName() { return name; }

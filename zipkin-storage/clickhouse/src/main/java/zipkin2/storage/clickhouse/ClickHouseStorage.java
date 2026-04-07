@@ -101,7 +101,7 @@ public class ClickHouseStorage extends StorageComponent {
     private boolean ensureSchema;
     private String username;
     private String password;
-    private boolean strictTraceId = true;
+    private boolean strictTraceId = false;
 
     public ClickHouseStorage build() {
       return new ClickHouseStorage(this);

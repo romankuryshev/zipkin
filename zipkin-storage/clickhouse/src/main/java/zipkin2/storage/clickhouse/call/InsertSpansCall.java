@@ -7,6 +7,7 @@ import zipkin2.storage.clickhouse.dto.DependencyRecord;
 import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
 import zipkin2.storage.clickhouse.dto.SpanRecord;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
@@ -88,20 +89,18 @@ public final class InsertSpansCall extends Call<Void> {
       String traceIdToUse = traceIdHigh ? span.traceId().substring(16) : span.traceId();
       String traceIdHighStr = traceIdHigh ? span.traceId().substring(0, 16) : null;
 
-      long traceIdLow = parseHexStringToLong(traceIdToUse);
-      long traceIdHighVal = traceIdHighStr != null ? parseHexStringToLong(traceIdHighStr) : 0L;
-      Long parentIdVal = span.parentId() != null && !span.parentId().isEmpty()
-        ? parseHexStringToLong(span.parentId())
+      BigInteger traceIdLow = parseHexStringToBigInteger(traceIdToUse);
+      BigInteger traceIdHighVal = traceIdHighStr != null ? parseHexStringToBigInteger(traceIdHighStr) : BigInteger.ZERO;
+      BigInteger parentIdVal = span.parentId() != null && !span.parentId().isEmpty()
+        ? parseHexStringToBigInteger(span.parentId())
         : null;
-      long spanId = parseHexStringToLong(span.id());
-
+      BigInteger spanId = parseHexStringToBigInteger(span.id());
       List<Object[]> annotations = buildAnnotationsList(span);
 
       String statusCode = span.tags().get("status.code");
       if (statusCode == null) {
         statusCode = "";
       }
-
       SpanRecord record = new SpanRecord(
         traceIdLow,
         traceIdHighVal,
@@ -166,12 +165,12 @@ public final class InsertSpansCall extends Call<Void> {
     return records;
   }
 
-  private long parseHexStringToLong(String hexStr) {
-    if (hexStr == null || hexStr.isEmpty()) return 0L;
+  private BigInteger parseHexStringToBigInteger(String hexStr) {
+    if (hexStr == null || hexStr.isEmpty()) return BigInteger.ZERO;
     try {
-      return Long.parseUnsignedLong(hexStr, 16);
+      return new BigInteger(hexStr, 16);
     } catch (Exception e) {
-      return 0L;
+      return BigInteger.ZERO;
     }
   }
 

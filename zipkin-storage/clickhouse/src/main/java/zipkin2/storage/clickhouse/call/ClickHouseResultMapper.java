@@ -51,19 +51,19 @@ public final class ClickHouseResultMapper {
     Span.Builder builder = Span.newBuilder();
 
     // trace_id: combine trace_id and trace_id_high
-    long traceIdLow = getLong(record.get("trace_id"));
-    long traceIdHigh = getLong(record.get("trace_id_high"));
+    BigInteger traceIdLow = getBigInteger(record.get("trace_id"));
+    BigInteger traceIdHigh = getBigInteger(record.get("trace_id_high"));
     String traceId = combineTraceId(traceIdLow, traceIdHigh);
     builder.traceId(traceId);
 
     // span_id
-    long spanIdLong = getLong(record.get("span_id"));
-    builder.id(Long.toHexString(spanIdLong));
+    BigInteger spanIdBig = getBigInteger(record.get("span_id"));
+    builder.id(spanIdBig != null ? spanIdBig.toString(16) : "0");
 
     // parent_id
-    Long parentIdLong = getLong(record.get("parent_id"));
-    if (parentIdLong != null && parentIdLong > 0) {
-      builder.parentId(Long.toHexString(parentIdLong));
+    BigInteger parentIdBig = getBigInteger(record.get("parent_id"));
+    if (parentIdBig != null && parentIdBig.compareTo(BigInteger.ZERO) > 0) {
+      builder.parentId(parentIdBig.toString(16));
     }
 
     // name
@@ -192,17 +192,6 @@ public final class ClickHouseResultMapper {
   }
 
   /**
-   * Combines 64-bit trace_id parts into 128-bit hex string
-   */
-  private static String combineTraceId(long traceIdLow, long traceIdHigh) {
-    if (traceIdHigh == 0L) {
-      return Long.toHexString(traceIdLow);
-    } else {
-      return Long.toHexString(traceIdHigh) + String.format("%016x", traceIdLow);
-    }
-  }
-
-  /**
    * Преобразует результат запроса в список Span объектов
    */
   static List<Span> toSpans(QueryResponse response, Client client) {
@@ -272,6 +261,28 @@ public final class ClickHouseResultMapper {
     return links;
   }
 
+  /**
+   * Объединяет trace_id_high и trace_id_low в одну hex строку
+   */
+  private static String combineTraceId(BigInteger traceIdLow, BigInteger traceIdHigh) {
+    if (traceIdLow == null) traceIdLow = BigInteger.ZERO;
+    if (traceIdHigh == null) traceIdHigh = BigInteger.ZERO;
+
+    String lowHex = traceIdLow.toString(16);
+    String highHex = traceIdHigh.toString(16);
+
+    // Pad low to 16 characters
+    lowHex = String.format("%16s", lowHex).replace(' ', '0');
+
+    // If high is 0, return only low (16 chars)
+    if (traceIdHigh.compareTo(BigInteger.ZERO) == 0) {
+      return lowHex;
+    }
+
+    // Return high + low (32 chars total)
+    return highHex + lowHex;
+  }
+
   private static Long getLong(Object value) {
     if (value == null) return null;
     if (value instanceof Long) return (Long) value;
@@ -284,6 +295,21 @@ public final class ClickHouseResultMapper {
     if (value instanceof String) {
       try {
         return Long.parseLong((String) value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private static BigInteger getBigInteger(Object value) {
+    if (value == null) return null;
+    if (value instanceof BigInteger) return (BigInteger) value;
+    if (value instanceof Long) return BigInteger.valueOf((Long) value);
+    if (value instanceof Integer) return BigInteger.valueOf((Integer) value);
+    if (value instanceof String) {
+      try {
+        return new BigInteger((String) value);
       } catch (NumberFormatException e) {
         return null;
       }

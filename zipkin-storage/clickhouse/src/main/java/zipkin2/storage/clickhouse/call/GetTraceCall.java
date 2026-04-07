@@ -4,6 +4,7 @@ import com.clickhouse.client.api.Client;
 import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.Call;
 import zipkin2.Span;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -17,7 +18,7 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
 
   @Override
   protected List<Span> doExecute() {
-    long[] traceParts = parseTraceId(traceId);
+    BigInteger[] traceParts = parseTraceId(traceId);
     String sql = "SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, " +
       "s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, " +
       "s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, " +
@@ -52,21 +53,24 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
     return "GetTraceCall{traceId=" + traceId + "}";
   }
 
-  private long[] parseTraceId(String hexTraceId) {
+  private BigInteger[] parseTraceId(String hexTraceId) {
     if (hexTraceId == null || hexTraceId.isEmpty()) {
-      return new long[]{0L, 0L};
+      return new BigInteger[]{BigInteger.ZERO, BigInteger.ZERO};
     }
 
     try {
       if (hexTraceId.length() <= 16) {
-        return new long[]{Long.parseUnsignedLong(hexTraceId, 16), 0L};
+        BigInteger low = new BigInteger(hexTraceId, 16);
+        return new BigInteger[]{low, BigInteger.ZERO};
       } else {
         String high = hexTraceId.substring(0, hexTraceId.length() - 16);
         String low = hexTraceId.substring(hexTraceId.length() - 16);
-        return new long[]{Long.parseUnsignedLong(low, 16), Long.parseUnsignedLong(high, 16)};
+        BigInteger highBig = new BigInteger(high, 16);
+        BigInteger lowBig = new BigInteger(low, 16);
+        return new BigInteger[]{lowBig, highBig};
       }
     } catch (Exception e) {
-      return new long[]{0L, 0L};
+      return new BigInteger[]{BigInteger.ZERO, BigInteger.ZERO};
     }
   }
 }
