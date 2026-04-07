@@ -369,7 +369,14 @@ export function newSpanRow(spansToMerge, isLeafSpan) {
 
     // Capture statistics from the span
     if (next.statistics && !res.statistics) {
+      console.log(
+        'DEBUG: Copying statistics to spanRow for span:',
+        next.name,
+        next.statistics,
+      );
       res.statistics = next.statistics;
+    } else if (!next.statistics) {
+      console.log('DEBUG: No statistics found for span:', next.name);
     }
   });
 

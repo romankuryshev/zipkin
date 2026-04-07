@@ -60,6 +60,11 @@ export function clean(span) {
   // shared is for the server side, unset it if accidentally set on the client side
   if (span.shared && span.kind !== 'CLIENT') res.shared = true;
 
+  // Copy statistics if present
+  if (span.statistics) {
+    res.statistics = span.statistics;
+  }
+
   return res;
 }
 
@@ -104,6 +109,14 @@ export function merge(left, right) {
 
   if (left.debug || right.debug) res.debug = true;
   if (left.shared || right.shared) res.shared = true;
+
+  // Preserve statistics if present (prefer left if both exist)
+  if (left.statistics) {
+    res.statistics = left.statistics;
+  } else if (right.statistics) {
+    res.statistics = right.statistics;
+  }
+
   return res;
 }
 

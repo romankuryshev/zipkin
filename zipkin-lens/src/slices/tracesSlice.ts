@@ -110,6 +110,17 @@ export const loadTrace = createAsyncThunk(
       throw Error(resp.statusText);
     }
     const rawTrace: Span[] = await resp.json();
+    console.log('DEBUG: Loaded rawTrace from API:', {
+      traceId,
+      spanCount: rawTrace.length,
+      firstSpanStatistics: rawTrace[0]?.statistics,
+      spansWithStats: rawTrace.filter((s) => s.statistics).length,
+      allSpans: rawTrace.map((s) => ({
+        name: s.name,
+        hasStats: !!s.statistics,
+        stats: s.statistics,
+      })),
+    });
     const skewCorrectedTrace = treeCorrectedForClockSkew(rawTrace);
     const adjustedTrace: AdjustedTrace = buildDetailedTraceSummary(
       skewCorrectedTrace,

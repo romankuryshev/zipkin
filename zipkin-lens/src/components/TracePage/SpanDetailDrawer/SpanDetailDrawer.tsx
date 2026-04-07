@@ -55,6 +55,16 @@ export const SpanDetailDrawer = ({
       }
     : null;
 
+  // Debug logging
+  React.useEffect(() => {
+    console.log('SpanDetailDrawer - span data:', {
+      spanName: span.spanName,
+      hasStatistics: !!span.statistics,
+      statistics: span.statistics,
+      spanStats,
+    });
+  }, [span, spanStats]);
+
   return (
     <Box className={classes.root}>
       <Grid container spacing={1}>
