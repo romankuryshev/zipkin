@@ -28,6 +28,7 @@ public class ClickHouseStorage extends StorageComponent {
   private final int autocompleteTtl;
   private final int autocompleteCardinality;
   private final AutocompleteTagsCache autocompleteTagsCache;
+  private final int maxSpansLimitMultiplier;
 
   ClickHouseStorage(Builder b) {
     this.client = createClient(b);
@@ -36,10 +37,11 @@ public class ClickHouseStorage extends StorageComponent {
     this.autocompleteKeys = b.autocompleteKeys;
     this.autocompleteTtl = b.autocompleteTtl;
     this.autocompleteCardinality = b.autocompleteCardinality;
+    this.maxSpansLimitMultiplier = b.maxSpansLimitMultiplier;
     this.autocompleteTagsCache = new AutocompleteTagsCache(
       b.autocompleteTtl, b.autocompleteCardinality, b.autocompleteKeys
     );
-    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId);
+    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier);
     this.spanConsumer = new ClickHouseSpanConsumer(
       client, b.database, b.strictTraceId, b.autocompleteKeys,
       b.autocompleteTtl, b.autocompleteCardinality, this.autocompleteTagsCache
@@ -111,6 +113,10 @@ public class ClickHouseStorage extends StorageComponent {
     }
   }
 
+  public int getMaxSpansLimitMultiplier() {
+    return maxSpansLimitMultiplier;
+  }
+
   public Client createClient(Builder b) {
     return new Client.Builder()
       .addEndpoint("http://" + b.host + ":" + b.port + "/")
@@ -138,6 +144,7 @@ public class ClickHouseStorage extends StorageComponent {
     private Set<String> autocompleteKeys = Set.of();
     private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
     private int autocompleteCardinality = 5 * 4000;
+    private int maxSpansLimitMultiplier = 100;
 
     public ClickHouseStorage build() {
       return new ClickHouseStorage(this);
@@ -195,6 +202,14 @@ public class ClickHouseStorage extends StorageComponent {
         throw new IllegalArgumentException("autocompleteCardinality <= 0");
       }
       this.autocompleteCardinality = autocompleteCardinality;
+      return this;
+    }
+
+    public Builder setMaxSpansLimitMultiplier(int maxSpansLimitMultiplier) {
+      if (maxSpansLimitMultiplier <= 0) {
+        throw new IllegalArgumentException("maxSpansLimitMultiplier <= 0");
+      }
+      this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
       return this;
     }
   }

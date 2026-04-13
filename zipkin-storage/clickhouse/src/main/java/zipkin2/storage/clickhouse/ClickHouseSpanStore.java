@@ -16,16 +16,23 @@ public class ClickHouseSpanStore implements SpanStore {
   private final Client client;
   private final String database;
   private final boolean strictTraceId;
+  private final int maxSpansLimitMultiplier;
 
   public ClickHouseSpanStore(Client client, String database, boolean strictTraceId) {
+    this(client, database, strictTraceId, 100);
+  }
+
+  public ClickHouseSpanStore(Client client, String database, boolean strictTraceId,
+                             int maxSpansLimitMultiplier) {
     this.client = client;
     this.database = database;
     this.strictTraceId = strictTraceId;
+    this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
   }
 
   @Override
   public Call<List<List<Span>>> getTraces(QueryRequest request) {
-    return new GetTracesCall(client, database, request);
+    return new GetTracesCall(client, database, request, maxSpansLimitMultiplier);
   }
 
   @Override

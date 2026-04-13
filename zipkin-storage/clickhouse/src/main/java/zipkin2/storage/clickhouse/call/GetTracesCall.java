@@ -11,10 +11,13 @@ import java.util.concurrent.ExecutionException;
 
 public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   private final QueryRequest request;
+  private final int maxSpansLimitMultiplier;
 
-  public GetTracesCall(Client client, String database, QueryRequest request) {
+  public GetTracesCall(Client client, String database, QueryRequest request,
+                       int maxSpansLimitMultiplier) {
     super(client, database);
     this.request = request;
+    this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
   }
 
   @Override
@@ -50,7 +53,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     }
 
     sql.append(" ORDER BY s.timestamp DESC")
-      .append(" LIMIT ").append(request.limit());
+      .append(" LIMIT ").append(request.limit() * maxSpansLimitMultiplier);
 
     try {
       QueryResponse response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
@@ -63,11 +66,13 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
 
   @Override
   public Call<List<List<Span>>> clone() {
-    return new GetTracesCall(client, database, request);
+    return new GetTracesCall(client, database, request, maxSpansLimitMultiplier);
   }
 
   @Override
   public String toString() {
-    return "GetTracesCall{limit=" + request.limit() + "}";
+    return "GetTracesCall{limit=" + request.limit() +
+      ", multiplier=" + maxSpansLimitMultiplier +
+      ", actualLimit=" + (request.limit() * maxSpansLimitMultiplier) + "}";
   }
 }

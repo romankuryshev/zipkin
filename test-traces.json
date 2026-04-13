@@ -1,0 +1,612 @@
+[
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "1",
+    "name": "HTTP GET /users/123",
+    "kind": "SERVER",
+    "timestamp": 1775347200000000,
+    "duration": 500000,
+    "localEndpoint": {
+      "serviceName": "api-gateway",
+      "ipv4": "192.168.1.10",
+      "port": 8080
+    },
+    "tags": {
+      "http.method": "GET",
+      "http.path": "/users/123",
+      "http.user_agent": "Mozilla/5.0",
+      "request.id": "req-789"
+    },
+    "annotations": [
+      { "timestamp": 1775347200000000, "value": "sr" },
+      { "timestamp": 1775347200500000, "value": "ss" }
+    ]
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "2",
+    "parentId": "1",
+    "name": "Auth check",
+    "kind": "CLIENT",
+    "timestamp": 1775347200010000,
+    "duration": 80000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "remoteEndpoint": {
+      "serviceName": "auth-service",
+      "ipv4": "192.168.1.20",
+      "port": 9000
+    },
+    "tags": {
+      "http.method": "POST",
+      "http.path": "/auth/validate",
+      "auth.token.type": "JWT"
+    }
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "3",
+    "parentId": "1",
+    "name": "get-user",
+    "kind": "SERVER",
+    "timestamp": 1775347200100000,
+    "duration": 300000,
+    "localEndpoint": {
+      "serviceName": "user-service",
+      "ipv4": "192.168.1.30",
+      "port": 8081
+    },
+    "tags": {
+      "user.id": "123",
+      "component": "user-controller"
+    }
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "4",
+    "parentId": "3",
+    "name": "cache lookup",
+    "kind": "CLIENT",
+    "timestamp": 1775347200110000,
+    "duration": 50000,
+    "localEndpoint": {
+      "serviceName": "user-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "redis-cache"
+    },
+    "tags": {
+      "cache.key": "user:123",
+      "cache.hit": "false"
+    }
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "5",
+    "parentId": "3",
+    "name": "select-user-from-db",
+    "kind": "CLIENT",
+    "timestamp": 1775347200170000,
+    "duration": 120000,
+    "localEndpoint": {
+      "serviceName": "user-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "user-db",
+      "ipv4": "192.168.1.40",
+      "port": 5432
+    },
+    "tags": {
+      "db.system": "postgresql",
+      "db.statement": "SELECT id, name, email FROM users WHERE id=123",
+      "db.rows_returned": "1"
+    },
+    "annotations": [
+      { "timestamp": 1775347200170000, "value": "cs" },
+      { "timestamp": 1775347200290000, "value": "cr" }
+    ]
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "6",
+    "parentId": "3",
+    "name": "load-user-orders",
+    "kind": "CLIENT",
+    "timestamp": 1775347200310000,
+    "duration": 100000,
+    "localEndpoint": {
+      "serviceName": "user-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "order-service"
+    },
+    "tags": {
+      "http.method": "GET",
+      "http.path": "/orders?userId=123"
+    }
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "7",
+    "parentId": "6",
+    "name": "select-orders",
+    "kind": "CLIENT",
+    "timestamp": 1775347200320000,
+    "duration": 70000,
+    "localEndpoint": {
+      "serviceName": "order-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "order-db"
+    },
+    "tags": {
+      "db.statement": "SELECT * FROM orders WHERE user_id=123",
+      "db.rows_returned": "5"
+    }
+  },
+  {
+    "traceId": "4e441824ec2b6a44ffdc9bb9a6453df3",
+    "id": "8",
+    "parentId": "1",
+    "name": "response serialization",
+    "kind": "SERVER",
+    "timestamp": 1775347200420000,
+    "duration": 40000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "tags": {
+      "serialization.format": "json",
+      "response.size": "512"
+    }
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "1",
+    "name": "HTTP POST /products",
+    "kind": "SERVER",
+    "timestamp": 1775347300000000,
+    "duration": 850000,
+    "localEndpoint": {
+      "serviceName": "api-gateway",
+      "ipv4": "192.168.1.10",
+      "port": 8080
+    },
+    "tags": {
+      "http.method": "POST",
+      "http.path": "/products",
+      "http.user_agent": "curl/7.68.0",
+      "request.id": "req-790"
+    },
+    "annotations": [
+      { "timestamp": 1775347300000000, "value": "sr" },
+      { "timestamp": 1775347300850000, "value": "ss" }
+    ]
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "2",
+    "parentId": "1",
+    "name": "Auth check",
+    "kind": "CLIENT",
+    "timestamp": 1775347300020000,
+    "duration": 95000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "remoteEndpoint": {
+      "serviceName": "auth-service",
+      "ipv4": "192.168.1.20",
+      "port": 9000
+    },
+    "tags": {
+      "http.method": "POST",
+      "http.path": "/auth/validate",
+      "auth.token.type": "OAuth2"
+    }
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "3",
+    "parentId": "1",
+    "name": "create-product",
+    "kind": "SERVER",
+    "timestamp": 1775347300150000,
+    "duration": 650000,
+    "localEndpoint": {
+      "serviceName": "product-service",
+      "ipv4": "192.168.1.50",
+      "port": 8082
+    },
+    "tags": {
+      "product.id": "prod-456",
+      "product.name": "Widget",
+      "component": "product-controller"
+    }
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "4",
+    "parentId": "3",
+    "name": "cache lookup",
+    "kind": "CLIENT",
+    "timestamp": 1775347300160000,
+    "duration": 15000,
+    "localEndpoint": {
+      "serviceName": "product-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "redis-cache"
+    },
+    "tags": {
+      "cache.key": "product-categories",
+      "cache.hit": "true"
+    }
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "5",
+    "parentId": "3",
+    "name": "select-user-from-db",
+    "kind": "CLIENT",
+    "timestamp": 1775347300180000,
+    "duration": 200000,
+    "localEndpoint": {
+      "serviceName": "product-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "product-db",
+      "ipv4": "192.168.1.41",
+      "port": 5432
+    },
+    "tags": {
+      "db.system": "postgresql",
+      "db.statement": "INSERT INTO products (name, category) VALUES ($1, $2)",
+      "db.rows_returned": "1"
+    }
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "6",
+    "parentId": "3",
+    "name": "publish-event",
+    "kind": "PRODUCER",
+    "timestamp": 1775347300390000,
+    "duration": 380000,
+    "localEndpoint": {
+      "serviceName": "product-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "kafka-broker"
+    },
+    "tags": {
+      "messaging.system": "kafka",
+      "messaging.topic": "product-created"
+    }
+  },
+  {
+    "traceId": "a1b2c3d4e5f6789012345678abcdef01",
+    "id": "8",
+    "parentId": "1",
+    "name": "response serialization",
+    "kind": "SERVER",
+    "timestamp": 1775347300780000,
+    "duration": 50000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "tags": {
+      "serialization.format": "json",
+      "response.size": "1024"
+    }
+  },
+  {
+    "traceId": "b2c3d4e5f6789012345678abcdef01a1",
+    "id": "1",
+    "name": "HTTP DELETE /products/456",
+    "kind": "SERVER",
+    "timestamp": 1775347400000000,
+    "duration": 250000,
+    "localEndpoint": {
+      "serviceName": "api-gateway",
+      "ipv4": "192.168.1.10",
+      "port": 8080
+    },
+    "tags": {
+      "http.method": "DELETE",
+      "http.path": "/products/456",
+      "request.id": "req-791"
+    },
+    "annotations": [
+      { "timestamp": 1775347400000000, "value": "sr" },
+      { "timestamp": 1775347400250000, "value": "ss" }
+    ]
+  },
+  {
+    "traceId": "b2c3d4e5f6789012345678abcdef01a1",
+    "id": "2",
+    "parentId": "1",
+    "name": "Auth check",
+    "kind": "CLIENT",
+    "timestamp": 1775347400015000,
+    "duration": 60000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "remoteEndpoint": {
+      "serviceName": "auth-service",
+      "ipv4": "192.168.1.20",
+      "port": 9000
+    },
+    "tags": {
+      "http.method": "POST",
+      "http.path": "/auth/validate",
+      "auth.token.type": "JWT"
+    }
+  },
+  {
+    "traceId": "b2c3d4e5f6789012345678abcdef01a1",
+    "id": "3",
+    "parentId": "1",
+    "name": "delete-product",
+    "kind": "SERVER",
+    "timestamp": 1775347400100000,
+    "duration": 140000,
+    "localEndpoint": {
+      "serviceName": "product-service",
+      "ipv4": "192.168.1.50",
+      "port": 8082
+    },
+    "tags": {
+      "product.id": "prod-456",
+      "component": "product-controller"
+    }
+  },
+  {
+    "traceId": "b2c3d4e5f6789012345678abcdef01a1",
+    "id": "5",
+    "parentId": "3",
+    "name": "select-user-from-db",
+    "kind": "CLIENT",
+    "timestamp": 1775347400110000,
+    "duration": 85000,
+    "localEndpoint": {
+      "serviceName": "product-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "product-db",
+      "ipv4": "192.168.1.41",
+      "port": 5432
+    },
+    "tags": {
+      "db.system": "postgresql",
+      "db.statement": "DELETE FROM products WHERE id = $1",
+      "db.rows_returned": "0"
+    }
+  },
+  {
+    "traceId": "c3d4e5f6789012345678abcdef01a1b2",
+    "id": "1",
+    "name": "HTTP GET /analytics/dashboard",
+    "kind": "SERVER",
+    "timestamp": 1775347500000000,
+    "duration": 1500000,
+    "localEndpoint": {
+      "serviceName": "api-gateway",
+      "ipv4": "192.168.1.10",
+      "port": 8080
+    },
+    "tags": {
+      "http.method": "GET",
+      "http.path": "/analytics/dashboard",
+      "request.id": "req-792"
+    },
+    "annotations": [
+      { "timestamp": 1775347500000000, "value": "sr" },
+      { "timestamp": 1775347501500000, "value": "ss" }
+    ]
+  },
+  {
+    "traceId": "c3d4e5f6789012345678abcdef01a1b2",
+    "id": "2",
+    "parentId": "1",
+    "name": "Auth check",
+    "kind": "CLIENT",
+    "timestamp": 1775347500020000,
+    "duration": 75000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "remoteEndpoint": {
+      "serviceName": "auth-service",
+      "ipv4": "192.168.1.20",
+      "port": 9000
+    },
+    "tags": {
+      "http.method": "POST",
+      "http.path": "/auth/validate",
+      "auth.token.type": "JWT"
+    }
+  },
+  {
+    "traceId": "c3d4e5f6789012345678abcdef01a1b2",
+    "id": "3",
+    "parentId": "1",
+    "name": "get-analytics",
+    "kind": "SERVER",
+    "timestamp": 1775347500150000,
+    "duration": 1300000,
+    "localEndpoint": {
+      "serviceName": "analytics-service",
+      "ipv4": "192.168.1.60",
+      "port": 8083
+    },
+    "tags": {
+      "component": "analytics-controller",
+      "report.type": "dashboard"
+    }
+  },
+  {
+    "traceId": "c3d4e5f6789012345678abcdef01a1b2",
+    "id": "4",
+    "parentId": "3",
+    "name": "cache lookup",
+    "kind": "CLIENT",
+    "timestamp": 1775347500160000,
+    "duration": 30000,
+    "localEndpoint": {
+      "serviceName": "analytics-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "redis-cache"
+    },
+    "tags": {
+      "cache.key": "dashboard-data",
+      "cache.hit": "false"
+    }
+  },
+  {
+    "traceId": "c3d4e5f6789012345678abcdef01a1b2",
+    "id": "5",
+    "parentId": "3",
+    "name": "select-user-from-db",
+    "kind": "CLIENT",
+    "timestamp": 1775347500210000,
+    "duration": 950000,
+    "localEndpoint": {
+      "serviceName": "analytics-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "analytics-db",
+      "ipv4": "192.168.1.42",
+      "port": 5432
+    },
+    "tags": {
+      "db.system": "postgresql",
+      "db.statement": "SELECT * FROM analytics WHERE date >= $1 AND date <= $2",
+      "db.rows_returned": "10000"
+    }
+  },
+  {
+    "traceId": "c3d4e5f6789012345678abcdef01a1b2",
+    "id": "6",
+    "parentId": "3",
+    "name": "load-user-orders",
+    "kind": "CLIENT",
+    "timestamp": 1775347501200000,
+    "duration": 50000,
+    "localEndpoint": {
+      "serviceName": "analytics-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "reporting-service"
+    },
+    "tags": {
+      "http.method": "GET",
+      "http.path": "/reports/summary"
+    }
+  },
+  {
+    "traceId": "d4e5f6789012345678abcdef01a1b2c3",
+    "id": "1",
+    "name": "HTTP GET /orders/user/789",
+    "kind": "SERVER",
+    "timestamp": 1775347600000000,
+    "duration": 350000,
+    "localEndpoint": {
+      "serviceName": "api-gateway",
+      "ipv4": "192.168.1.10",
+      "port": 8080
+    },
+    "tags": {
+      "http.method": "GET",
+      "http.path": "/orders/user/789",
+      "request.id": "req-793"
+    },
+    "annotations": [
+      { "timestamp": 1775347600000000, "value": "sr" },
+      { "timestamp": 1775347600350000, "value": "ss" }
+    ]
+  },
+  {
+    "traceId": "d4e5f6789012345678abcdef01a1b2c3",
+    "id": "2",
+    "parentId": "1",
+    "name": "Auth check",
+    "kind": "CLIENT",
+    "timestamp": 1775347600025000,
+    "duration": 70000,
+    "localEndpoint": {
+      "serviceName": "api-gateway"
+    },
+    "remoteEndpoint": {
+      "serviceName": "auth-service",
+      "ipv4": "192.168.1.20",
+      "port": 9000
+    },
+    "tags": {
+      "http.method": "POST",
+      "http.path": "/auth/validate",
+      "auth.token.type": "JWT"
+    }
+  },
+  {
+    "traceId": "d4e5f6789012345678abcdef01a1b2c3",
+    "id": "3",
+    "parentId": "1",
+    "name": "get-orders",
+    "kind": "SERVER",
+    "timestamp": 1775347600130000,
+    "duration": 200000,
+    "localEndpoint": {
+      "serviceName": "order-service",
+      "ipv4": "192.168.1.70",
+      "port": 8084
+    },
+    "tags": {
+      "user.id": "789",
+      "component": "order-controller"
+    }
+  },
+  {
+    "traceId": "d4e5f6789012345678abcdef01a1b2c3",
+    "id": "4",
+    "parentId": "3",
+    "name": "cache lookup",
+    "kind": "CLIENT",
+    "timestamp": 1775347600140000,
+    "duration": 25000,
+    "localEndpoint": {
+      "serviceName": "order-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "redis-cache"
+    },
+    "tags": {
+      "cache.key": "orders:user:789",
+      "cache.hit": "true"
+    }
+  },
+  {
+    "traceId": "d4e5f6789012345678abcdef01a1b2c3",
+    "id": "5",
+    "parentId": "3",
+    "name": "select-user-from-db",
+    "kind": "CLIENT",
+    "timestamp": 1775347600180000,
+    "duration": 10000,
+    "localEndpoint": {
+      "serviceName": "order-service"
+    },
+    "remoteEndpoint": {
+      "serviceName": "order-db"
+    },
+    "tags": {
+      "db.system": "postgresql",
+      "db.statement": "SELECT * FROM orders WHERE user_id = $1",
+      "db.rows_returned": "3"
+    }
+  }
+]
+

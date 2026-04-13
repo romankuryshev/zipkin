@@ -20,6 +20,7 @@ class ZipkinClickhouseStorageProperties {
   private List<String> autocompleteKeys = new ArrayList<>();
   private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
   private int autocompleteCardinality = 5 * 4000;
+  private int maxSpansLimitMultiplier = 100;
 
   public String getDatabase() {
     return database;
@@ -117,6 +118,7 @@ class ZipkinClickhouseStorageProperties {
       .setStrictTraceId(strictTraceId)
       .setAutocompleteKeys(autocompleteKeys)
       .setAutocompleteTtl(autocompleteTtl)
-      .setAutocompleteCardinality(autocompleteCardinality);
+      .setAutocompleteCardinality(autocompleteCardinality)
+      .setMaxSpansLimitMultiplier(maxSpansLimitMultiplier);
   }
 }
