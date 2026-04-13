@@ -97,10 +97,7 @@ public final class InsertSpansCall extends Call<Void> {
       BigInteger spanId = parseHexStringToBigInteger(span.id());
       List<Object[]> annotations = buildAnnotationsList(span);
 
-      String statusCode = span.tags().get("status.code");
-      if (statusCode == null) {
-        statusCode = "";
-      }
+      String statusCode = StatusCodeResolver.resolveStatusCode(span);
       SpanRecord record = new SpanRecord(
         traceIdLow,
         traceIdHighVal,
