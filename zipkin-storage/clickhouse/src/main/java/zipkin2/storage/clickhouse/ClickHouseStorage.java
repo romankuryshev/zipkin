@@ -1,6 +1,7 @@
 package zipkin2.storage.clickhouse;
 
 import com.clickhouse.client.api.Client;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -124,12 +125,20 @@ public class ClickHouseStorage extends StorageComponent {
   }
 
   public Client createClient(Builder b) {
-    return new Client.Builder()
-      .addEndpoint("http://" + b.host + ":" + b.port + "/")
+    Client.Builder clientBuilder = new Client.Builder()
       .setUsername(b.username)
       .setPassword(b.password)
-      .setDefaultDatabase(b.database)
-      .build();
+      .setDefaultDatabase(b.database);
+
+    if (!b.clusterNodes.isEmpty()) {
+      for (String endpoint : b.clusterNodes) {
+        clientBuilder.addEndpoint(endpoint);
+      }
+    } else {
+      clientBuilder.addEndpoint("http://" + b.host + ":" + b.port + "/");
+    }
+
+    return clientBuilder.build();
   }
 
   public void registerTables() {
@@ -142,6 +151,7 @@ public class ClickHouseStorage extends StorageComponent {
 
     private String host;
     private int port;
+    private List<String> clusterNodes = new ArrayList<>();
     private String database;
     private boolean ensureSchema;
     private String username;
@@ -222,6 +232,21 @@ public class ClickHouseStorage extends StorageComponent {
 
     public Builder setIncludeSpanStatistics(boolean includeSpanStatistics) {
       this.includeSpanStatistics = includeSpanStatistics;
+      return this;
+    }
+
+    public Builder addClusterNode(String host, int port) {
+      if (host == null) throw new NullPointerException("host == null");
+      if (port <= 0) throw new IllegalArgumentException("port <= 0");
+      this.clusterNodes.add("http://" + host + ":" + port + "/");
+      return this;
+    }
+
+    public Builder setClusterNodes(List<String> nodes) {
+      if (nodes == null) throw new NullPointerException("nodes == null");
+      if (nodes.isEmpty()) throw new IllegalArgumentException("nodes is empty");
+      this.clusterNodes.clear();
+      this.clusterNodes.addAll(nodes);
       return this;
     }
   }

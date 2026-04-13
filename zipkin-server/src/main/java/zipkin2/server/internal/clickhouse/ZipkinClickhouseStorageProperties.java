@@ -15,6 +15,7 @@ class ZipkinClickhouseStorageProperties {
   private int port = 8123;
   private String username = "zipkin";
   private String password = "zipkin";
+  private List<String> clusterNodes = new ArrayList<>();
   private boolean ensureSchema = true;
   private boolean strictTraceId = true;
   private List<String> autocompleteKeys = new ArrayList<>();
@@ -61,6 +62,14 @@ class ZipkinClickhouseStorageProperties {
 
   public void setPassword(String password) {
     this.password = password;
+  }
+
+  public List<String> getClusterNodes() {
+    return clusterNodes;
+  }
+
+  public void setClusterNodes(List<String> clusterNodes) {
+    this.clusterNodes = clusterNodes;
   }
 
   public boolean isEnsureSchema() {
@@ -134,6 +143,7 @@ class ZipkinClickhouseStorageProperties {
       .setUsername(username)
       .setPassword(password)
       .setDatabase(database)
+      .setClusterNodes(clusterNodes)
       .setEnsureSchema(ensureSchema)
       .setStrictTraceId(strictTraceId)
       .setAutocompleteKeys(autocompleteKeys)
