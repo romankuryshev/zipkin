@@ -1,12 +1,16 @@
 package zipkin2.storage.clickhouse;
 
 import com.clickhouse.client.api.Client;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import zipkin2.storage.AutocompleteTags;
 import zipkin2.storage.ServiceAndSpanNames;
 import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.SpanStore;
 import zipkin2.storage.StorageComponent;
 import zipkin2.storage.Traces;
+import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 import zipkin2.storage.clickhouse.dto.DependencyRecord;
 import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
 import zipkin2.storage.clickhouse.dto.SpanRecord;
@@ -20,13 +24,26 @@ public class ClickHouseStorage extends StorageComponent {
   private final boolean ensureScheme;
   private final String database;
   private final boolean strictTraceId;
+  private final Set<String> autocompleteKeys;
+  private final int autocompleteTtl;
+  private final int autocompleteCardinality;
+  private final AutocompleteTagsCache autocompleteTagsCache;
 
   ClickHouseStorage(Builder b) {
     this.client = createClient(b);
-    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId);
-    this.spanConsumer = new ClickHouseSpanConsumer(client, b.database, b.strictTraceId);
     this.database = b.database;
     this.strictTraceId = b.strictTraceId;
+    this.autocompleteKeys = b.autocompleteKeys;
+    this.autocompleteTtl = b.autocompleteTtl;
+    this.autocompleteCardinality = b.autocompleteCardinality;
+    this.autocompleteTagsCache = new AutocompleteTagsCache(
+      b.autocompleteTtl, b.autocompleteCardinality, b.autocompleteKeys
+    );
+    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId);
+    this.spanConsumer = new ClickHouseSpanConsumer(
+      client, b.database, b.strictTraceId, b.autocompleteKeys,
+      b.autocompleteTtl, b.autocompleteCardinality, this.autocompleteTagsCache
+    );
     this.ensureScheme = b.ensureSchema;
     if (ensureScheme) {
       Schema.ensure(this);
@@ -56,7 +73,7 @@ public class ClickHouseStorage extends StorageComponent {
 
   @Override
   public AutocompleteTags autocompleteTags() {
-    return new ClickHouseAutocompleteTags(client, database);
+    return new ClickHouseAutocompleteTags(client, database, autocompleteTagsCache);
   }
 
   public boolean isEnsureScheme() {
@@ -71,6 +88,23 @@ public class ClickHouseStorage extends StorageComponent {
     return strictTraceId;
   }
 
+
+  public Set<String> getAutocompleteKeys() {
+    return autocompleteKeys;
+  }
+
+  public int getAutocompleteTtl() {
+    return autocompleteTtl;
+  }
+
+  public int getAutocompleteCardinality() {
+    return autocompleteCardinality;
+  }
+
+  public AutocompleteTagsCache getAutocompleteTagsCache() {
+    return autocompleteTagsCache;
+  }
+
   public void close() {
     if (spanConsumer != null) {
       spanConsumer.close();
@@ -78,13 +112,12 @@ public class ClickHouseStorage extends StorageComponent {
   }
 
   public Client createClient(Builder b) {
-    Client c = new Client.Builder()
+    return new Client.Builder()
       .addEndpoint("http://" + b.host + ":" + b.port + "/")
       .setUsername(b.username)
       .setPassword(b.password)
       .setDefaultDatabase(b.database)
       .build();
-    return c;
   }
 
   public void registerTables() {
@@ -101,7 +134,10 @@ public class ClickHouseStorage extends StorageComponent {
     private boolean ensureSchema;
     private String username;
     private String password;
-    private boolean strictTraceId = false;
+    private boolean strictTraceId = true;
+    private Set<String> autocompleteKeys = Set.of();
+    private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
+    private int autocompleteCardinality = 5 * 4000;
 
     public ClickHouseStorage build() {
       return new ClickHouseStorage(this);
@@ -139,6 +175,26 @@ public class ClickHouseStorage extends StorageComponent {
 
     public Builder setStrictTraceId(boolean strictTraceId) {
       this.strictTraceId = strictTraceId;
+      return this;
+    }
+
+    public Builder setAutocompleteKeys(List<String> keys) {
+      if (keys == null) throw new NullPointerException("keys == null");
+      this.autocompleteKeys = Set.copyOf(keys);
+      return this;
+    }
+
+    public Builder setAutocompleteTtl(int autocompleteTtl) {
+      if (autocompleteTtl <= 0) throw new IllegalArgumentException("autocompleteTtl <= 0");
+      this.autocompleteTtl = autocompleteTtl;
+      return this;
+    }
+
+    public Builder setAutocompleteCardinality(int autocompleteCardinality) {
+      if (autocompleteCardinality <= 0) {
+        throw new IllegalArgumentException("autocompleteCardinality <= 0");
+      }
+      this.autocompleteCardinality = autocompleteCardinality;
       return this;
     }
   }

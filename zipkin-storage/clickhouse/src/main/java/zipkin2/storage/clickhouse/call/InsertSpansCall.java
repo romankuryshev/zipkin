@@ -3,6 +3,7 @@ package zipkin2.storage.clickhouse.call;
 import com.clickhouse.client.api.Client;
 import zipkin2.Call;
 import zipkin2.Span;
+import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 import zipkin2.storage.clickhouse.dto.DependencyRecord;
 import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
 import zipkin2.storage.clickhouse.dto.SpanRecord;
@@ -13,15 +14,19 @@ import java.util.concurrent.ExecutionException;
 
 public final class InsertSpansCall extends Call<Void> {
   private final Client client;
-  private final String database;
   private final List<Span> spans;
   private final boolean strictTraceId;
+  private final Set<String> autocompleteKeys;
+  private final AutocompleteTagsCache autocompleteTagsCache;
 
-  public InsertSpansCall(Client client, String database, List<Span> spans, boolean strictTraceId) {
+  public InsertSpansCall(Client client, List<Span> spans, boolean strictTraceId,
+                         Set<String> autocompleteKeys,
+                         AutocompleteTagsCache autocompleteTagsCache) {
     this.client = client;
-    this.database = database;
     this.spans = spans;
     this.strictTraceId = strictTraceId;
+    this.autocompleteKeys = autocompleteKeys;
+    this.autocompleteTagsCache = autocompleteTagsCache;
   }
 
   @Override
@@ -43,6 +48,11 @@ public final class InsertSpansCall extends Call<Void> {
       List<DependencyRecord> depsRecords = new ArrayList<>(extractDependencies());
       if (!depsRecords.isEmpty()) {
         client.insert("dependencies", depsRecords).get();
+      }
+
+      // 4. Insert autocomplete tag values if configured
+      if (!autocompleteKeys.isEmpty()) {
+        insertAutocompleteData();
       }
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
@@ -237,5 +247,27 @@ public final class InsertSpansCall extends Call<Void> {
     } catch (Exception e) {
       return null;
     }
+  }
+
+  private void insertAutocompleteData() {
+    if (autocompleteTagsCache == null || autocompleteKeys.isEmpty()) {
+      return;
+    }
+
+    Map<String, Set<String>> tagValuesByKey = new HashMap<>();
+
+    for (Span span : spans) {
+      if (span.tags() == null || span.tags().isEmpty()) continue;
+
+      for (String key : autocompleteKeys) {
+        String value = span.tags().get(key);
+        if (value != null && !value.isEmpty()) {
+          tagValuesByKey.computeIfAbsent(key, k -> new HashSet<>())
+            .add(value);
+        }
+      }
+    }
+
+    tagValuesByKey.forEach(autocompleteTagsCache::put);
   }
 }

@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import zipkin2.Call;
 import zipkin2.Span;
 import zipkin2.storage.SpanConsumer;
+import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 import zipkin2.storage.clickhouse.call.InsertSpansCall;
 
 import java.util.*;
@@ -18,6 +19,10 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private final Client client;
   private final String database;
   private final boolean strictTraceId;
+  private final Set<String> autocompleteKeys;
+  private final int autocompleteTtl;
+  private final int autocompleteCardinality;
+  private final AutocompleteTagsCache autocompleteTagsCache;
 
   private static final int BATCH_SIZE = 10;
   private static final int AUTO_FLUSH_INTERVAL_MS = 5000;
@@ -27,9 +32,22 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private final ReentrantLock lock = new ReentrantLock();
 
   public ClickHouseSpanConsumer(Client client, String database, boolean strictTraceId) {
+    this(client, database, strictTraceId, Set.of(),
+      (int) TimeUnit.HOURS.toMillis(1), 5 * 4000,
+      new AutocompleteTagsCache((int) TimeUnit.HOURS.toMillis(1), 5 * 4000, Set.of()));
+  }
+
+  public ClickHouseSpanConsumer(Client client, String database, boolean strictTraceId,
+                                Set<String> autocompleteKeys,
+                                int autocompleteTtl, int autocompleteCardinality,
+                                AutocompleteTagsCache autocompleteTagsCache) {
     this.client = client;
     this.database = database;
     this.strictTraceId = strictTraceId;
+    this.autocompleteKeys = autocompleteKeys;
+    this.autocompleteTtl = autocompleteTtl;
+    this.autocompleteCardinality = autocompleteCardinality;
+    this.autocompleteTagsCache = autocompleteTagsCache;
     this.scheduler = Executors.newScheduledThreadPool(1, r -> {
       Thread t = new Thread(r, "ClickHouseBatchFlush");
       t.setDaemon(true);
@@ -61,7 +79,7 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
       }
       List<Span> toFlush = new ArrayList<>(buffer);
       buffer.clear();
-      return new InsertSpansCall(client, database, toFlush, strictTraceId);
+      return new InsertSpansCall(client, toFlush, strictTraceId, autocompleteKeys, autocompleteTagsCache);
     } finally {
       lock.unlock();
     }

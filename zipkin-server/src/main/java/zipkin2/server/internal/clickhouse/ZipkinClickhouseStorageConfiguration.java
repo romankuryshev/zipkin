@@ -16,8 +16,6 @@ public class ZipkinClickhouseStorageConfiguration {
   @Bean
   @ConditionalOnMissingBean
   public StorageComponent storageComponent(ZipkinClickhouseStorageProperties properties) {
-    return properties.toStorageBuilder()
-      .setEnsureSchema(true)
-      .build();
+    return properties.toStorageBuilder().build();
   }
 }
