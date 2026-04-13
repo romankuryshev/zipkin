@@ -17,27 +17,29 @@ public class ClickHouseSpanStore implements SpanStore {
   private final String database;
   private final boolean strictTraceId;
   private final int maxSpansLimitMultiplier;
+  private final boolean includeSpanStatistics;
 
   public ClickHouseSpanStore(Client client, String database, boolean strictTraceId) {
-    this(client, database, strictTraceId, 100);
+    this(client, database, strictTraceId, 100, true);
   }
 
   public ClickHouseSpanStore(Client client, String database, boolean strictTraceId,
-                             int maxSpansLimitMultiplier) {
+                             int maxSpansLimitMultiplier, boolean includeSpanStatistics) {
     this.client = client;
     this.database = database;
     this.strictTraceId = strictTraceId;
     this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
+    this.includeSpanStatistics = includeSpanStatistics;
   }
 
   @Override
   public Call<List<List<Span>>> getTraces(QueryRequest request) {
-    return new GetTracesCall(client, database, request, maxSpansLimitMultiplier);
+    return new GetTracesCall(client, database, request, maxSpansLimitMultiplier, includeSpanStatistics);
   }
 
   @Override
   public Call<List<Span>> getTrace(String traceId) {
-    return new GetTraceCall(client, database, traceId);
+    return new GetTraceCall(client, database, traceId, includeSpanStatistics);
   }
 
   @Override
@@ -67,6 +69,10 @@ public class ClickHouseSpanStore implements SpanStore {
 
   public boolean isStrictTraceId() {
     return strictTraceId;
+  }
+
+  public boolean isIncludeSpanStatistics() {
+    return includeSpanStatistics;
   }
 }
 

@@ -19,6 +19,7 @@ class ZipkinClickhouseStorageProperties {
   private boolean strictTraceId = true;
   private List<String> autocompleteKeys = new ArrayList<>();
   private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
+  private boolean includeSpanStatistics = true;
   private int autocompleteCardinality = 5 * 4000;
   private int maxSpansLimitMultiplier = 100;
 
@@ -96,6 +97,14 @@ class ZipkinClickhouseStorageProperties {
     this.autocompleteTtl = autocompleteTtl;
   }
 
+  public boolean isIncludeSpanStatistics() {
+    return includeSpanStatistics;
+  }
+
+  public void setIncludeSpanStatistics(boolean includeSpanStatistics) {
+    this.includeSpanStatistics = includeSpanStatistics;
+  }
+
   public int getAutocompleteCardinality() {
     return autocompleteCardinality;
   }
@@ -105,6 +114,17 @@ class ZipkinClickhouseStorageProperties {
       throw new IllegalArgumentException("autocompleteCardinality <= 0");
     }
     this.autocompleteCardinality = autocompleteCardinality;
+  }
+
+  public int getMaxSpansLimitMultiplier() {
+    return maxSpansLimitMultiplier;
+  }
+
+  public void setMaxSpansLimitMultiplier(int maxSpansLimitMultiplier) {
+    if (maxSpansLimitMultiplier <= 0) {
+      throw new IllegalArgumentException("maxSpansLimitMultiplier <= 0");
+    }
+    this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
   }
 
   public ClickHouseStorage.Builder toStorageBuilder() {
@@ -118,6 +138,7 @@ class ZipkinClickhouseStorageProperties {
       .setStrictTraceId(strictTraceId)
       .setAutocompleteKeys(autocompleteKeys)
       .setAutocompleteTtl(autocompleteTtl)
+      .setIncludeSpanStatistics(includeSpanStatistics)
       .setAutocompleteCardinality(autocompleteCardinality)
       .setMaxSpansLimitMultiplier(maxSpansLimitMultiplier);
   }

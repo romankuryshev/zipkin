@@ -10,33 +10,49 @@ import java.util.concurrent.ExecutionException;
 
 public final class GetTraceCall extends ClickHouseCall<List<Span>> {
   private final String traceId;
+  private final boolean includeSpanStatistics;
 
   public GetTraceCall(Client client, String database, String traceId) {
+    this(client, database, traceId, true);
+  }
+
+  public GetTraceCall(Client client, String database, String traceId, boolean includeSpanStatistics) {
     super(client, database);
     this.traceId = Span.normalizeTraceId(traceId);
+    this.includeSpanStatistics = includeSpanStatistics;
   }
 
   @Override
   protected List<Span> doExecute() {
     BigInteger[] traceParts = parseTraceId(traceId);
-    String sql = "SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, " +
-      "s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, " +
-      "s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, " +
-      "s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, " +
-      "stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, " +
-      "stats.success_count, stats.error_count, stats.total_count " +
-      "FROM " + database + ".spans s" +
-      ClickHouseResultMapper.getStatisticsJoinFragment(database) +
-      " WHERE s.trace_id = {traceIdLow:UInt64}" +
-      " AND s.trace_id_high = {traceIdHigh:UInt64}" +
-      " ORDER BY s.timestamp ASC";
+
+    StringBuilder sql = new StringBuilder();
+    sql.append("SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, ")
+      .append("s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, ")
+      .append("s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, ")
+      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations");
+
+    if (includeSpanStatistics) {
+      sql.append(", stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, ")
+        .append("stats.success_count, stats.error_count, stats.total_count ");
+    }
+
+    sql.append("FROM ").append(database).append(".spans s");
+
+    if (includeSpanStatistics) {
+      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));
+    }
+
+    sql.append(" WHERE s.trace_id = {traceIdLow:UInt64}")
+      .append(" AND s.trace_id_high = {traceIdHigh:UInt64}")
+      .append(" ORDER BY s.timestamp ASC");
 
     java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
     queryParams.put("traceIdLow", traceParts[0]);
     queryParams.put("traceIdHigh", traceParts[1]);
 
     try {
-      QueryResponse response = client.query(sql, queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
+      QueryResponse response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
       return ClickHouseResultMapper.toSpans(response, client);
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
@@ -45,7 +61,7 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
 
   @Override
   public Call<List<Span>> clone() {
-    return new GetTraceCall(client, database, traceId);
+    return new GetTraceCall(client, database, traceId, includeSpanStatistics);
   }
 
   @Override

@@ -29,6 +29,7 @@ public class ClickHouseStorage extends StorageComponent {
   private final int autocompleteCardinality;
   private final AutocompleteTagsCache autocompleteTagsCache;
   private final int maxSpansLimitMultiplier;
+  private final boolean includeSpanStatistics;
 
   ClickHouseStorage(Builder b) {
     this.client = createClient(b);
@@ -38,10 +39,11 @@ public class ClickHouseStorage extends StorageComponent {
     this.autocompleteTtl = b.autocompleteTtl;
     this.autocompleteCardinality = b.autocompleteCardinality;
     this.maxSpansLimitMultiplier = b.maxSpansLimitMultiplier;
+    this.includeSpanStatistics = b.includeSpanStatistics;
     this.autocompleteTagsCache = new AutocompleteTagsCache(
       b.autocompleteTtl, b.autocompleteCardinality, b.autocompleteKeys
     );
-    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier);
+    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier, b.includeSpanStatistics);
     this.spanConsumer = new ClickHouseSpanConsumer(
       client, b.database, b.strictTraceId, b.autocompleteKeys,
       b.autocompleteTtl, b.autocompleteCardinality, this.autocompleteTagsCache
@@ -117,6 +119,10 @@ public class ClickHouseStorage extends StorageComponent {
     return maxSpansLimitMultiplier;
   }
 
+  public boolean isIncludeSpanStatistics() {
+    return includeSpanStatistics;
+  }
+
   public Client createClient(Builder b) {
     return new Client.Builder()
       .addEndpoint("http://" + b.host + ":" + b.port + "/")
@@ -145,6 +151,7 @@ public class ClickHouseStorage extends StorageComponent {
     private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
     private int autocompleteCardinality = 5 * 4000;
     private int maxSpansLimitMultiplier = 100;
+    private boolean includeSpanStatistics = true;
 
     public ClickHouseStorage build() {
       return new ClickHouseStorage(this);
@@ -210,6 +217,11 @@ public class ClickHouseStorage extends StorageComponent {
         throw new IllegalArgumentException("maxSpansLimitMultiplier <= 0");
       }
       this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
+      return this;
+    }
+
+    public Builder setIncludeSpanStatistics(boolean includeSpanStatistics) {
+      this.includeSpanStatistics = includeSpanStatistics;
       return this;
     }
   }

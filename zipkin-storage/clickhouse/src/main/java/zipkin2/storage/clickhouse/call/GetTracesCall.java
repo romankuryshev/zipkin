@@ -12,12 +12,14 @@ import java.util.concurrent.ExecutionException;
 public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   private final QueryRequest request;
   private final int maxSpansLimitMultiplier;
+  private final boolean includeSpanStatistics;
 
   public GetTracesCall(Client client, String database, QueryRequest request,
-                       int maxSpansLimitMultiplier) {
+                       int maxSpansLimitMultiplier, boolean includeSpanStatistics) {
     super(client, database);
     this.request = request;
     this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
+    this.includeSpanStatistics = includeSpanStatistics;
   }
 
   @Override
@@ -30,12 +32,20 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     sql.append("SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, ")
       .append("s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, ")
       .append("s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, ")
-      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, ")
-      .append("stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, ")
-      .append("stats.success_count, stats.error_count, stats.total_count ")
-      .append("FROM ").append(database).append(".spans s")
-      .append(ClickHouseResultMapper.getStatisticsJoinFragment(database))
-      .append(" WHERE s.timestamp >= {startTime:DateTime64}")
+      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations");
+
+    if (includeSpanStatistics) {
+      sql.append(", stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, ")
+        .append("stats.success_count, stats.error_count, stats.total_count ");
+    }
+
+    sql.append("FROM ").append(database).append(".spans s");
+
+    if (includeSpanStatistics) {
+      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));
+    }
+
+    sql.append(" WHERE s.timestamp >= {startTime:DateTime64}")
       .append(" AND s.timestamp <= {endTime:DateTime64}");
 
     Map<String, Object> queryParams = new java.util.HashMap<>();
@@ -66,7 +76,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
 
   @Override
   public Call<List<List<Span>>> clone() {
-    return new GetTracesCall(client, database, request, maxSpansLimitMultiplier);
+    return new GetTracesCall(client, database, request, maxSpansLimitMultiplier, includeSpanStatistics);
   }
 
   @Override
