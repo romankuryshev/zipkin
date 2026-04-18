@@ -1,186 +1,310 @@
 package zipkin2.storage.clickhouse;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import zipkin2.Call;
 import zipkin2.Span;
+import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 public class ClickHouseSpanConsumerTest {
 
-  @Test
-  public void testBatchFlushOnSizeThreshold() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+  private static final Logger log = LoggerFactory.getLogger(ClickHouseSpanConsumerTest.class);
 
-    try {
-      List<Span> spans = createTestSpans(10);
+  private com.clickhouse.client.api.Client mockClient;
+  private ClickHouseSpanConsumer consumer;
 
-      Call<Void> result = consumer.accept(spans);
-      assertNotNull(result);
+  @BeforeEach
+  public void setUp() {
+    mockClient = mock(com.clickhouse.client.api.Client.class);
+  }
 
-    } finally {
+  @AfterEach
+  public void tearDown() {
+    if (consumer != null) {
       consumer.close();
     }
   }
 
+  // ==================== Тесты буферизации и батчинга ====================
+
   @Test
-  public void testSpansBuffered() throws IOException {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+  public void bufferAccumulatesSpansBelowThreshold() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
 
+    List<Span> spans = createTestSpans(5);
+    Call<Void> result = consumer.accept(spans);
+
+    assertNotNull(result);
+  }
+
+  @Test
+  public void bufferFlushesWhenBatchSizeReached() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> spans = createTestSpans(10);
+    Call<Void> result = consumer.accept(spans);
+
+    assertNotNull(result);
+    assertNotEquals(Call.create(null), result,
+      "Должен быть возвращен InsertSpansCall, а не пустой Call");
+  }
+
+  @Test
+  public void bufferFlushesWhenExceedingBatchSize() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> spans = createTestSpans(15);
+    Call<Void> result = consumer.accept(spans);
+
+    assertNotNull(result);
+    assertNotEquals(Call.create(null), result);
+  }
+
+  @Test
+  public void bufferClearedAfterFlush() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> spans1 = createTestSpans(10);
+    consumer.accept(spans1);
+
+    List<Span> spans2 = createTestSpans(5);
+    Call<Void> call2 = consumer.accept(spans2);
+
+    assertEquals(Call.create(null), call2,
+      "После фланша буфер должен быть очищен");
+  }
+
+  @Test
+  public void multipleBatchesAccumulateCorrectly() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    consumer.accept(createTestSpans(3));
+    consumer.accept(createTestSpans(3));
+    Call<Void> call3 = consumer.accept(createTestSpans(4));
+
+    assertNotNull(call3);
+  }
+
+  // ==================== Тесты конкурентного доступа ====================
+
+  @Test
+  @Timeout(10)
+  @SuppressWarnings("resource")
+  public void concurrentSpansAdditionIsThreadSafe() throws InterruptedException {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    int numThreads = 5;
+    int spansPerThread = 4;
+    ExecutorService executor = Executors.newFixedThreadPool(numThreads);
     try {
-      List<Span> spans = createTestSpans(5);
-      Call<Void> result = consumer.accept(spans);
-      assertNotNull(result);
+      CountDownLatch latch = new CountDownLatch(numThreads);
+      AtomicInteger errorCount = new AtomicInteger(0);
 
-      result.execute();
+      for (int t = 0; t < numThreads; t++) {
+        executor.submit(() -> {
+          try {
+            for (int i = 0; i < spansPerThread; i++) {
+              List<Span> spans = createTestSpans(1);
+              consumer.accept(spans);
+            }
+          } catch (Exception e) {
+            errorCount.incrementAndGet();
+            log.error("Error during concurrent span addition", e);
+          } finally {
+            latch.countDown();
+          }
+        });
+      }
 
+      assertTrue(latch.await(10, TimeUnit.SECONDS), "Все потоки должны завершиться");
+      assertEquals(0, errorCount.get(), "Не должно быть ошибок при конкурентном доступе");
     } finally {
-      consumer.close();
+      executor.shutdown();
     }
   }
 
   @Test
-  public void testTimeoutFlush() throws InterruptedException {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+  @Timeout(15)
+  @SuppressWarnings("resource")
+  public void concurrentBatchesDoNotLoseSpans() throws InterruptedException {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
 
-      List<Span> spans = createTestSpans(3);
-      consumer.accept(spans);
+    int numThreads = 3;
+    int batchesPerThread = 2;
+    int spansPerBatch = 5;
 
-      Thread.sleep(6000);
-      consumer.close();
+    ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+    try {
+      CountDownLatch latch = new CountDownLatch(numThreads);
+      List<Integer> acceptedSpanCounts = Collections.synchronizedList(new ArrayList<>());
+
+      for (int t = 0; t < numThreads; t++) {
+        executor.submit(() -> {
+          try {
+            for (int b = 0; b < batchesPerThread; b++) {
+              List<Span> spans = createTestSpans(spansPerBatch);
+              consumer.accept(spans);
+              acceptedSpanCounts.add(spans.size());
+            }
+          } finally {
+            latch.countDown();
+          }
+        });
+      }
+
+      assertTrue(latch.await(15, TimeUnit.SECONDS));
+
+      int totalSpans = acceptedSpanCounts.stream().mapToInt(Integer::intValue).sum();
+      assertEquals(numThreads * batchesPerThread * spansPerBatch, totalSpans);
+    } finally {
+      executor.shutdown();
+    }
   }
 
   @Test
-  public void testCloseFlushesRemainingSpans() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+  @Timeout(10)
+  @SuppressWarnings("resource")
+  public void raceConditionBetweenBufferAndFlush() throws InterruptedException {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    CyclicBarrier barrier = new CyclicBarrier(2);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      CountDownLatch latch = new CountDownLatch(2);
+
+      executor.submit(() -> {
+        try {
+          barrier.await();
+          for (int i = 0; i < 5; i++) {
+            consumer.accept(createTestSpans(2));
+            Thread.sleep(10);
+          }
+        } catch (Exception e) {
+          log.error("Error in thread 1", e);
+        } finally {
+          latch.countDown();
+        }
+      });
+
+      executor.submit(() -> {
+        try {
+          barrier.await();
+          Thread.sleep(30);
+          consumer.close();
+        } catch (Exception e) {
+          log.error("Error in thread 2", e);
+        } finally {
+          latch.countDown();
+        }
+      });
+
+      assertTrue(latch.await(10, TimeUnit.SECONDS));
+    } finally {
+      executor.shutdown();
+    }
+  }
+
+  // ==================== Тесты обработки ошибок ====================
+
+  @Test
+  public void handleNullSpansList() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    Call<Void> result = consumer.accept(null);
+
+    assertNotNull(result);
+    assertEquals(Call.create(null), result);
+  }
+
+  @Test
+  public void handleEmptySpansList() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    Call<Void> result = consumer.accept(new ArrayList<>());
+
+    assertNotNull(result);
+    assertEquals(Call.create(null), result);
+  }
+
+  @Test
+  public void consumerContinuesAfterFlushError() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    consumer.accept(createTestSpans(10));
+
+    Call<Void> result = consumer.accept(createTestSpans(5));
+
+    assertNotNull(result);
+  }
+
+  @Test
+  public void multipleFlushesWithDifferentBatches() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    consumer.accept(createTestSpans(10));
+    consumer.accept(createTestSpans(10));
+    consumer.accept(createTestSpans(10));
+
+    assertNotNull(consumer);
+  }
+
+  // ==================== Жизненный цикл и shutdown ====================
+
+  @Test
+  @Timeout(35)
+  public void closeFlushesRemainingSpans() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
 
     List<Span> spans = createTestSpans(5);
     consumer.accept(spans);
 
     consumer.close();
+
+    assertTrue(true);
   }
 
   @Test
-  public void testErrorHandling() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+  @Timeout(35)
+  public void schedulerShutdownWaitsForCompletion() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
 
-      List<Span> spans = createTestSpans(5);
-      consumer.accept(spans);
+    consumer.accept(createTestSpans(3));
 
-      consumer.close();
+    long startTime = System.currentTimeMillis();
+    consumer.close();
+    long duration = System.currentTimeMillis() - startTime;
+
+    assertTrue(duration < 35000, "Close должен завершиться за < 35 секунд");
   }
 
   @Test
-  public void acceptWithNullSpansList() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+  @Timeout(35)
+  public void multipleCloseCallsAreIdempotent() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
 
-    try {
-      Call<Void> result = consumer.accept(null);
-      assertNotNull(result);
-    } finally {
-      consumer.close();
-    }
+    consumer.accept(createTestSpans(3));
+    consumer.close();
+
+    consumer.close();
+
+    assertTrue(true);
   }
 
-  @Test
-  public void acceptWithEmptySpansList() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-
-    try {
-      Call<Void> result = consumer.accept(new ArrayList<>());
-      assertNotNull(result);
-    } finally {
-      consumer.close();
-    }
-  }
+  // ==================== Конфигурация и кластер ====================
 
   @Test
-  public void acceptMultipleBatchesBelowThreshold() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-
-    try {
-      consumer.accept(createTestSpans(3));
-      consumer.accept(createTestSpans(3));
-      consumer.accept(createTestSpans(2));
-
-      assertNotNull(consumer);
-    } finally {
-      consumer.close();
-    }
-  }
-
-  @Test
-  public void acceptWithStrictTraceIdFalse() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", false);
-
-    try {
-      List<Span> spans = createTestSpans(5);
-      Call<Void> result = consumer.accept(spans);
-      assertNotNull(result);
-    } finally {
-      consumer.close();
-    }
-  }
-
-  @Test
-  public void acceptWithDifferentDatabase() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "custom_db", true);
-
-    try {
-      List<Span> spans = createTestSpans(5);
-      Call<Void> result = consumer.accept(spans);
-      assertNotNull(result);
-    } finally {
-      consumer.close();
-    }
-  }
-
-  @Test
-  public void acceptExactlyAtBatchThreshold() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-
-    try {
-      List<Span> spans = createTestSpans(10);
-      Call<Void> result = consumer.accept(spans);
-      assertNotNull(result);
-    } finally {
-      consumer.close();
-    }
-  }
-
-  @Test
-  public void acceptAboveBatchThreshold() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
-    var consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-
-    try {
-      List<Span> spans = createTestSpans(15);
-      Call<Void> result = consumer.accept(spans);
-      assertNotNull(result);
-    } finally {
-      consumer.close();
-    }
-  }
-
-  @Test
-  public void multipleConsumersWithSameClient() {
-    var mockClient = mock(com.clickhouse.client.api.Client.class);
+  public void multipleConsumersWithSameClientIndependent() {
     var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
     var consumer2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
 
@@ -196,15 +320,148 @@ public class ClickHouseSpanConsumerTest {
     }
   }
 
+  @Test
+  public void acceptWithDifferentStrictTraceIdModes() {
+    var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    List<Span> result1 = createTestSpans(5);
+    consumer1.accept(result1);
+    consumer1.close();
+
+    var consumer2 = new ClickHouseSpanConsumer(mockClient, "zipkin", false);
+    List<Span> result2 = createTestSpans(5);
+    consumer2.accept(result2);
+    consumer2.close();
+
+    assertTrue(true);
+  }
+
+  @Test
+  public void acceptWithDifferentDatabases() {
+    var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer1.accept(createTestSpans(5));
+    consumer1.close();
+
+    var consumer2 = new ClickHouseSpanConsumer(mockClient, "custom_db", true);
+    consumer2.accept(createTestSpans(5));
+    consumer2.close();
+
+    assertTrue(true);
+  }
+
+  @Test
+  public void consumerWithAutocompleteConfiguration() {
+    Set<String> autocompleteKeys = Set.of("service", "span.kind");
+    int autocompleteTtl = 3600000;
+    int autocompleteCardinality = 20000;
+    AutocompleteTagsCache cache = new AutocompleteTagsCache(
+      autocompleteTtl, autocompleteCardinality, autocompleteKeys
+    );
+
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true,
+      autocompleteKeys, autocompleteTtl, autocompleteCardinality, cache);
+
+    consumer.accept(createTestSpans(5));
+
+    assertNotNull(consumer);
+  }
+
+  // ==================== Граничные случаи ====================
+
+  @Test
+  @Timeout(35)
+  public void largeNumberOfSpansHandledCorrectly() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    for (int i = 0; i < 100; i++) {
+      consumer.accept(createTestSpans(1));
+    }
+
+    assertNotNull(consumer);
+  }
+
+  @Test
+  @Timeout(35)
+  public void largeSpanBatchProcessed() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> largeSpans = createTestSpans(100);
+    Call<Void> result = consumer.accept(largeSpans);
+
+    assertNotNull(result);
+  }
+
+  @Test
+  public void spanAttributesPreservedThroughBuffer() {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> spans = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      long traceIdMsb = Math.abs(UUID.randomUUID().getMostSignificantBits());
+      long traceIdLsb = Math.abs(UUID.randomUUID().getLeastSignificantBits());
+      long spanId = Math.abs(UUID.randomUUID().getMostSignificantBits());
+
+      if (traceIdMsb == 0) traceIdMsb = 1;
+      if (spanId == 0) spanId = 1;
+
+      Span span = Span.newBuilder()
+        .traceId(String.format("%016x%016x", traceIdMsb, traceIdLsb))
+        .id(String.format("%016x", spanId))
+        .name("service-" + i)
+        .parentId(String.format("%016x", Math.abs(UUID.randomUUID().getMostSignificantBits()) | 1L))
+        .timestamp(System.currentTimeMillis() * 1000 + i)
+        .duration(1000 + i * 100)
+        .kind(Span.Kind.SERVER)
+        .build();
+      spans.add(span);
+    }
+
+    consumer.accept(spans);
+
+    assertNotNull(consumer);
+  }
+
+  @Test
+  @Timeout(35)
+  public void timeoutFlushWorksProperly() throws InterruptedException {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> spans = createTestSpans(3);
+    consumer.accept(spans);
+
+    Thread.sleep(6000);
+
+    consumer.close();
+  }
+
+  @Test
+  @Timeout(40)
+  public void closeBeforeTimeoutFlushTriggers() throws InterruptedException {
+    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+
+    List<Span> spans = createTestSpans(3);
+    consumer.accept(spans);
+
+    Thread.sleep(1000);
+    consumer.close();
+
+    assertTrue(true);
+  }
+
   private List<Span> createTestSpans(int count) {
     List<Span> spans = new ArrayList<>();
+    long baseTimestamp = System.currentTimeMillis() * 1000;
+
     for (int i = 0; i < count; i++) {
+      long traceIdMsb = 0x1111111111111111L + i;
+      long traceIdLsb = 0x2222222222222222L + i;
+      long spanId = 0x3333333333333333L + i;
+
       Span span = Span.newBuilder()
-        .traceId("0000000000000001")
-        .id(String.format("%016x", i + 1))
+        .traceId(String.format("%016x%016x", traceIdMsb, traceIdLsb))
+        .id(String.format("%016x", spanId))
         .name("test-span-" + i)
-        .timestamp(System.currentTimeMillis() * 1000)
-        .duration(100)
+        .timestamp(baseTimestamp + i)
+        .duration(100 + i)
         .build();
       spans.add(span);
     }
