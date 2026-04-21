@@ -18,16 +18,10 @@ import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Маппер для преобразования результатов ClickHouse в объекты Zipkin
- */
 public final class ClickHouseResultMapper {
 
   private ClickHouseResultMapper() {}
 
-  /**
-   * Возвращает SQL фрагмент для LEFT JOIN с таблицей статистики
-   */
   static String getStatisticsJoinFragment(String database) {
     return " LEFT JOIN (SELECT span_name, span_kind, service_name, " +
       "medianMerge(median_duration) AS median_duration, " +
@@ -191,9 +185,6 @@ public final class ClickHouseResultMapper {
     return builder.build();
   }
 
-  /**
-   * Преобразует результат запроса в список Span объектов
-   */
   static List<Span> toSpans(QueryResponse response, Client client) {
     List<Span> spans = new ArrayList<>();
 
@@ -209,9 +200,6 @@ public final class ClickHouseResultMapper {
     return spans;
   }
 
-  /**
-   * Преобразует результат запроса в список строк
-   */
   static List<String> toStringList(QueryResponse response, Client client, String columnName) {
     List<String> result = new ArrayList<>();
 
@@ -229,9 +217,6 @@ public final class ClickHouseResultMapper {
     return result;
   }
 
-  /**
-   * Группирует spans по trace_id
-   */
   static List<List<Span>> groupSpansByTraceId(List<Span> spans) {
     Map<String, List<Span>> grouped = spans.stream()
       .collect(Collectors.groupingBy(Span::traceId));
