@@ -49,7 +49,8 @@ public class ClickHouseStorage extends StorageComponent {
     );
     this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier, b.includeSpanStatistics);
     this.spanConsumer = new ClickHouseSpanConsumer(
-      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache
+      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache,
+      b.batchSize, b.autoFlushIntervalMs
     );
     this.ensureScheme = b.ensureSchema;
     if (ensureScheme) {
@@ -74,7 +75,8 @@ public class ClickHouseStorage extends StorageComponent {
     );
     this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier, b.includeSpanStatistics);
     this.spanConsumer = new ClickHouseSpanConsumer(
-      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache
+      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache,
+      b.batchSize, b.autoFlushIntervalMs
     );
     this.ensureScheme = false;
   }
@@ -191,6 +193,8 @@ public class ClickHouseStorage extends StorageComponent {
     private int autocompleteCardinality = 5 * 4000;
     private int maxSpansLimitMultiplier = 100;
     private boolean includeSpanStatistics = true;
+    private int batchSize = 10000;
+    private int autoFlushIntervalMs = 5000;
 
     @Override public ClickHouseStorage build() {
       return new ClickHouseStorage(this);
@@ -286,6 +290,18 @@ public class ClickHouseStorage extends StorageComponent {
 
     public Builder setIncludeSpanStatistics(boolean includeSpanStatistics) {
       this.includeSpanStatistics = includeSpanStatistics;
+      return this;
+    }
+
+    public Builder setBatchSize(int batchSize) {
+      if (batchSize <= 0) throw new IllegalArgumentException("batchSize <= 0");
+      this.batchSize = batchSize;
+      return this;
+    }
+
+    public Builder setAutoFlushIntervalMs(int autoFlushIntervalMs) {
+      if (autoFlushIntervalMs <= 0) throw new IllegalArgumentException("autoFlushIntervalMs <= 0");
+      this.autoFlushIntervalMs = autoFlushIntervalMs;
       return this;
     }
 

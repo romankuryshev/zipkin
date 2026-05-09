@@ -23,6 +23,8 @@ class ZipkinClickhouseStorageProperties {
   private boolean includeSpanStatistics = true;
   private int autocompleteCardinality = 5 * 4000;
   private int maxSpansLimitMultiplier = 100;
+  private int batchSize = 10000;
+  private int autoFlushIntervalMs = 5000;
 
   public String getDatabase() {
     return database;
@@ -136,6 +138,24 @@ class ZipkinClickhouseStorageProperties {
     this.maxSpansLimitMultiplier = maxSpansLimitMultiplier;
   }
 
+  public int getBatchSize() {
+    return batchSize;
+  }
+
+  public void setBatchSize(int batchSize) {
+    if (batchSize <= 0) throw new IllegalArgumentException("batchSize <= 0");
+    this.batchSize = batchSize;
+  }
+
+  public int getAutoFlushIntervalMs() {
+    return autoFlushIntervalMs;
+  }
+
+  public void setAutoFlushIntervalMs(int autoFlushIntervalMs) {
+    if (autoFlushIntervalMs <= 0) throw new IllegalArgumentException("autoFlushIntervalMs <= 0");
+    this.autoFlushIntervalMs = autoFlushIntervalMs;
+  }
+
   public ClickHouseStorage.Builder toStorageBuilder() {
     return new ClickHouseStorage.Builder()
       .setHost(host)
@@ -150,6 +170,8 @@ class ZipkinClickhouseStorageProperties {
       .setAutocompleteTtl(autocompleteTtl)
       .setIncludeSpanStatistics(includeSpanStatistics)
       .setAutocompleteCardinality(autocompleteCardinality)
-      .setMaxSpansLimitMultiplier(maxSpansLimitMultiplier);
+      .setMaxSpansLimitMultiplier(maxSpansLimitMultiplier)
+      .setBatchSize(batchSize)
+      .setAutoFlushIntervalMs(autoFlushIntervalMs);
   }
 }

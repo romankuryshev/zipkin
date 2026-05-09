@@ -21,8 +21,8 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private final Set<String> autocompleteKeys;
   private final AutocompleteTagsCache autocompleteTagsCache;
 
-  private static final int BATCH_SIZE = 10000;
-  private static final int AUTO_FLUSH_INTERVAL_MS = 5000;
+  private final int batchSize;
+  private final int autoFlushIntervalMs;
 
   private Queue<Span> buffer = new ConcurrentLinkedQueue<>();
   private final ScheduledExecutorService scheduler;
@@ -36,16 +36,26 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   public ClickHouseSpanConsumer(Client client, boolean strictTraceId,
                                 Set<String> autocompleteKeys,
                                 AutocompleteTagsCache autocompleteTagsCache) {
+    this(client, strictTraceId, autocompleteKeys, autocompleteTagsCache, 10000, 5000);
+  }
+
+  public ClickHouseSpanConsumer(Client client, boolean strictTraceId,
+                                Set<String> autocompleteKeys,
+                                AutocompleteTagsCache autocompleteTagsCache,
+                                int batchSize,
+                                int autoFlushIntervalMs) {
     this.client = client;
     this.strictTraceId = strictTraceId;
     this.autocompleteKeys = autocompleteKeys;
     this.autocompleteTagsCache = autocompleteTagsCache;
+    this.batchSize = batchSize;
+    this.autoFlushIntervalMs = autoFlushIntervalMs;
     this.scheduler = Executors.newScheduledThreadPool(1, r -> {
       Thread t = new Thread(r, "ClickHouseBatchFlush");
       t.setDaemon(true);
       return t;
     });
-    scheduler.scheduleWithFixedDelay(this::flushBufferAsync, 30000, AUTO_FLUSH_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    scheduler.scheduleWithFixedDelay(this::flushBufferAsync, 30000, this.autoFlushIntervalMs, TimeUnit.MILLISECONDS);
   }
 
   @Override
@@ -57,7 +67,7 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
 
     Call<Void> insertCall = Call.create(null);
     // Check if we should flush immediately (batch size reached)
-    if (buffer.size() >= BATCH_SIZE) {
+    if (buffer.size() >= batchSize) {
       insertCall = flushBuffer();
     }
     buffer.addAll(spans);
@@ -67,7 +77,7 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private Call<Void> flushBuffer() {
     lock.lock();
     try {
-      if (buffer.size() < BATCH_SIZE) {
+      if (buffer.size() < batchSize) {
         return Call.create(null);
       }
       List<Span> toFlush = new ArrayList<>(buffer);

@@ -34,7 +34,7 @@ class ITClickHouseStorage {
 
     @Test
     @Override
-    @Disabled("MergeTree does not deduplicate; ReplacingMergeTree requires background merge")
+    @Disabled("MergeTree does not deduplicate; ReplacingMergeTree requires background merge, optional by doc")
     protected void getTrace_deduplicates(TestInfo testInfo) {
     }
   }
@@ -98,13 +98,6 @@ class ITClickHouseStorage {
     @Override public void clear() throws Exception {
       clickhouse.clear();
     }
-
-    @Test
-    @Override
-    @Disabled("getDependencies() does not apply endTs/lookback time filtering")
-    protected void endTsInsideTheTrace(TestInfo testInfo) {
-    }
-
 
     @Test
     @Override
