@@ -98,7 +98,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     List<Span> spans = createTestSpans(1);
@@ -116,7 +116,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     // Батч из 10 спанов
@@ -136,7 +136,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     // 3 батча по 10 спанов
@@ -160,7 +160,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     int numThreads = 5;
@@ -247,7 +247,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
 
     // Добавляем спаны
     storage.spanConsumer().accept(createTestSpans(5));
@@ -284,7 +284,7 @@ public class ClickHouseStorageClusterIntegrationTest {
               .setUsername("zipkin")
               .setPassword("zipkin");
 
-            ClickHouseStorage storage = new ClickHouseStorage(builder);
+            ClickHouseStorage storage = createStorage(builder);
             localStorages.add(storage);
             storages.add(storage);
 
@@ -329,7 +329,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     // 100 больших батчей
@@ -351,7 +351,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     // 200 маленьких батчей
@@ -374,7 +374,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storage = new ClickHouseStorage(builder);
+    ClickHouseStorage storage = createStorage(builder);
     storages.add(storage);
 
     int numThreads = 10;
@@ -434,7 +434,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storagePrimary = new ClickHouseStorage(builderPrimary);
+    ClickHouseStorage storagePrimary = createStorage(builderPrimary);
     storages.add(storagePrimary);
 
     storagePrimary.spanConsumer().accept(createTestSpans(5));
@@ -448,7 +448,7 @@ public class ClickHouseStorageClusterIntegrationTest {
       .setUsername("zipkin")
       .setPassword("zipkin");
 
-    ClickHouseStorage storageReplica = new ClickHouseStorage(builderReplica);
+    ClickHouseStorage storageReplica = createStorage(builderReplica);
     storages.add(storageReplica);
 
     storageReplica.spanConsumer().accept(createTestSpans(5));
@@ -457,6 +457,11 @@ public class ClickHouseStorageClusterIntegrationTest {
   }
 
   // ==================== Вспомогательные методы ====================
+
+  private ClickHouseStorage createStorage(ClickHouseStorage.Builder builder) {
+    com.clickhouse.client.api.Client mockClient = mock(com.clickhouse.client.api.Client.class);
+    return new ClickHouseStorage(builder, mockClient);
+  }
 
   private List<Span> createTestSpans(int count) {
     List<Span> spans = new ArrayList<>();

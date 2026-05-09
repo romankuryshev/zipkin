@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import zipkin2.Call;
 import zipkin2.Span;
-import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -36,11 +35,9 @@ public class ClickHouseSpanConsumerTest {
     }
   }
 
-  // ==================== Тесты буферизации и батчинга ====================
-
   @Test
   public void bufferAccumulatesSpansBelowThreshold() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> spans = createTestSpans(5);
     Call<Void> result = consumer.accept(spans);
@@ -49,31 +46,21 @@ public class ClickHouseSpanConsumerTest {
   }
 
   @Test
-  public void bufferFlushesWhenBatchSizeReached() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-
-    List<Span> spans = createTestSpans(10);
-    Call<Void> result = consumer.accept(spans);
-
-    assertNotNull(result);
-    assertNotEquals(Call.create(null), result,
-      "Должен быть возвращен InsertSpansCall, а не пустой Call");
-  }
-
-  @Test
   public void bufferFlushesWhenExceedingBatchSize() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
-    List<Span> spans = createTestSpans(15);
+    List<Span> spans = createTestSpans(10000);
+    List<Span> spans2 = createTestSpans(1);
     Call<Void> result = consumer.accept(spans);
+    Call<Void> result2 = consumer.accept(spans2);
 
-    assertNotNull(result);
-    assertNotEquals(Call.create(null), result);
+    assertEquals(Call.create(null), result);
+    assertNotEquals(Call.create(null), result2);
   }
 
   @Test
   public void bufferClearedAfterFlush() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> spans1 = createTestSpans(10);
     consumer.accept(spans1);
@@ -87,7 +74,7 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void multipleBatchesAccumulateCorrectly() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     consumer.accept(createTestSpans(3));
     consumer.accept(createTestSpans(3));
@@ -96,13 +83,11 @@ public class ClickHouseSpanConsumerTest {
     assertNotNull(call3);
   }
 
-  // ==================== Тесты конкурентного доступа ====================
-
   @Test
   @Timeout(10)
   @SuppressWarnings("resource")
   public void concurrentSpansAdditionIsThreadSafe() throws InterruptedException {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     int numThreads = 5;
     int spansPerThread = 4;
@@ -138,7 +123,7 @@ public class ClickHouseSpanConsumerTest {
   @Timeout(15)
   @SuppressWarnings("resource")
   public void concurrentBatchesDoNotLoseSpans() throws InterruptedException {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     int numThreads = 3;
     int batchesPerThread = 2;
@@ -176,7 +161,7 @@ public class ClickHouseSpanConsumerTest {
   @Timeout(10)
   @SuppressWarnings("resource")
   public void raceConditionBetweenBufferAndFlush() throws InterruptedException {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     CyclicBarrier barrier = new CyclicBarrier(2);
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -215,11 +200,9 @@ public class ClickHouseSpanConsumerTest {
     }
   }
 
-  // ==================== Тесты обработки ошибок ====================
-
   @Test
   public void handleNullSpansList() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     Call<Void> result = consumer.accept(null);
 
@@ -229,7 +212,7 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void handleEmptySpansList() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     Call<Void> result = consumer.accept(new ArrayList<>());
 
@@ -239,7 +222,7 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void consumerContinuesAfterFlushError() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     consumer.accept(createTestSpans(10));
 
@@ -250,7 +233,7 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void multipleFlushesWithDifferentBatches() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     consumer.accept(createTestSpans(10));
     consumer.accept(createTestSpans(10));
@@ -259,12 +242,10 @@ public class ClickHouseSpanConsumerTest {
     assertNotNull(consumer);
   }
 
-  // ==================== Жизненный цикл и shutdown ====================
-
   @Test
   @Timeout(35)
   public void closeFlushesRemainingSpans() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> spans = createTestSpans(5);
     consumer.accept(spans);
@@ -277,7 +258,7 @@ public class ClickHouseSpanConsumerTest {
   @Test
   @Timeout(35)
   public void schedulerShutdownWaitsForCompletion() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     consumer.accept(createTestSpans(3));
 
@@ -291,7 +272,7 @@ public class ClickHouseSpanConsumerTest {
   @Test
   @Timeout(35)
   public void multipleCloseCallsAreIdempotent() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     consumer.accept(createTestSpans(3));
     consumer.close();
@@ -301,12 +282,10 @@ public class ClickHouseSpanConsumerTest {
     assertTrue(true);
   }
 
-  // ==================== Конфигурация и кластер ====================
-
   @Test
   public void multipleConsumersWithSameClientIndependent() {
-    var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    var consumer2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    var consumer1 = new ClickHouseSpanConsumer(mockClient, true);
+    var consumer2 = new ClickHouseSpanConsumer(mockClient, true);
 
     try {
       consumer1.accept(createTestSpans(5));
@@ -322,12 +301,12 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void acceptWithDifferentStrictTraceIdModes() {
-    var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    var consumer1 = new ClickHouseSpanConsumer(mockClient, true);
     List<Span> result1 = createTestSpans(5);
     consumer1.accept(result1);
     consumer1.close();
 
-    var consumer2 = new ClickHouseSpanConsumer(mockClient, "zipkin", false);
+    var consumer2 = new ClickHouseSpanConsumer(mockClient, false);
     List<Span> result2 = createTestSpans(5);
     consumer2.accept(result2);
     consumer2.close();
@@ -337,11 +316,11 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void acceptWithDifferentDatabases() {
-    var consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    var consumer1 = new ClickHouseSpanConsumer(mockClient, true);
     consumer1.accept(createTestSpans(5));
     consumer1.close();
 
-    var consumer2 = new ClickHouseSpanConsumer(mockClient, "custom_db", true);
+    var consumer2 = new ClickHouseSpanConsumer(mockClient, true);
     consumer2.accept(createTestSpans(5));
     consumer2.close();
 
@@ -349,28 +328,9 @@ public class ClickHouseSpanConsumerTest {
   }
 
   @Test
-  public void consumerWithAutocompleteConfiguration() {
-    Set<String> autocompleteKeys = Set.of("service", "span.kind");
-    int autocompleteTtl = 3600000;
-    int autocompleteCardinality = 20000;
-    AutocompleteTagsCache cache = new AutocompleteTagsCache(
-      autocompleteTtl, autocompleteCardinality, autocompleteKeys
-    );
-
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true,
-      autocompleteKeys, autocompleteTtl, autocompleteCardinality, cache);
-
-    consumer.accept(createTestSpans(5));
-
-    assertNotNull(consumer);
-  }
-
-  // ==================== Граничные случаи ====================
-
-  @Test
   @Timeout(35)
   public void largeNumberOfSpansHandledCorrectly() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     for (int i = 0; i < 100; i++) {
       consumer.accept(createTestSpans(1));
@@ -382,7 +342,7 @@ public class ClickHouseSpanConsumerTest {
   @Test
   @Timeout(35)
   public void largeSpanBatchProcessed() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> largeSpans = createTestSpans(100);
     Call<Void> result = consumer.accept(largeSpans);
@@ -392,7 +352,7 @@ public class ClickHouseSpanConsumerTest {
 
   @Test
   public void spanAttributesPreservedThroughBuffer() {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> spans = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
@@ -423,7 +383,7 @@ public class ClickHouseSpanConsumerTest {
   @Test
   @Timeout(35)
   public void timeoutFlushWorksProperly() throws InterruptedException {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> spans = createTestSpans(3);
     consumer.accept(spans);
@@ -436,7 +396,7 @@ public class ClickHouseSpanConsumerTest {
   @Test
   @Timeout(40)
   public void closeBeforeTimeoutFlushTriggers() throws InterruptedException {
-    consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    consumer = new ClickHouseSpanConsumer(mockClient, true);
 
     List<Span> spans = createTestSpans(3);
     consumer.accept(spans);

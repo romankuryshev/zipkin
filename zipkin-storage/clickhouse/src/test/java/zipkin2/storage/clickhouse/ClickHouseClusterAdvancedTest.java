@@ -39,7 +39,7 @@ public class ClickHouseClusterAdvancedTest {
     List<ClickHouseSpanConsumer> nodes = new ArrayList<>();
 
     for (int i = 0; i < nodeCount; i++) {
-      nodes.add(new ClickHouseSpanConsumer(mockClient, "zipkin", true));
+      nodes.add(new ClickHouseSpanConsumer(mockClient, true));
       consumers.add(nodes.get(i));
     }
 
@@ -73,7 +73,7 @@ public class ClickHouseClusterAdvancedTest {
     List<ClickHouseSpanConsumer> cluster = new ArrayList<>();
 
     for (int i = 0; i < 2; i++) {
-      ClickHouseSpanConsumer node = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+      ClickHouseSpanConsumer node = new ClickHouseSpanConsumer(mockClient, true);
       cluster.add(node);
       consumers.add(node);
     }
@@ -83,7 +83,7 @@ public class ClickHouseClusterAdvancedTest {
     }
 
     for (int i = 0; i < 2; i++) {
-      ClickHouseSpanConsumer node = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+      ClickHouseSpanConsumer node = new ClickHouseSpanConsumer(mockClient, true);
       cluster.add(node);
       consumers.add(node);
     }
@@ -98,8 +98,8 @@ public class ClickHouseClusterAdvancedTest {
   @Test
   @Timeout(45)
   public void testClusterFailover() {
-    ClickHouseSpanConsumer primary = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer secondary = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    ClickHouseSpanConsumer primary = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer secondary = new ClickHouseSpanConsumer(mockClient, true);
 
     consumers.add(primary);
     consumers.add(secondary);

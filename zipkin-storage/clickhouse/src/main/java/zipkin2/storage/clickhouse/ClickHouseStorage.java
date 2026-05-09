@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import zipkin2.storage.AutocompleteTags;
 import zipkin2.storage.ServiceAndSpanNames;
 import zipkin2.storage.SpanConsumer;
@@ -46,14 +48,34 @@ public class ClickHouseStorage extends StorageComponent {
     );
     this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier, b.includeSpanStatistics);
     this.spanConsumer = new ClickHouseSpanConsumer(
-      client, b.database, b.strictTraceId, b.autocompleteKeys,
-      b.autocompleteTtl, b.autocompleteCardinality, this.autocompleteTagsCache
+      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache
     );
     this.ensureScheme = b.ensureSchema;
     if (ensureScheme) {
       Schema.ensure(this);
     }
     registerTables();
+  }
+
+  // Package-private constructor for testing with a pre-built mock client.
+  // Skips registerTables() and ensureSchema.
+  ClickHouseStorage(Builder b, Client client) {
+    this.client = client;
+    this.database = b.database;
+    this.strictTraceId = b.strictTraceId;
+    this.autocompleteKeys = b.autocompleteKeys;
+    this.autocompleteTtl = b.autocompleteTtl;
+    this.autocompleteCardinality = b.autocompleteCardinality;
+    this.maxSpansLimitMultiplier = b.maxSpansLimitMultiplier;
+    this.includeSpanStatistics = b.includeSpanStatistics;
+    this.autocompleteTagsCache = new AutocompleteTagsCache(
+      b.autocompleteTtl, b.autocompleteCardinality, b.autocompleteKeys
+    );
+    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier, b.includeSpanStatistics);
+    this.spanConsumer = new ClickHouseSpanConsumer(
+      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache
+    );
+    this.ensureScheme = false;
   }
 
   @Override

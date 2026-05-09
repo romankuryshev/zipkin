@@ -10,9 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import zipkin2.Call;
 import zipkin2.Span;
-import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -21,10 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-/**
- * Сложные тесты для ClickHouseSpanConsumer при работе с кластером ClickHouse.
- * Проверяет распределение спанов между узлами, load balancing и обработку отказов узлов.
- */
 public class ClickHouseClusterSpanConsumerTest {
 
   private static final Logger log = LoggerFactory.getLogger(ClickHouseClusterSpanConsumerTest.class);
@@ -47,13 +41,11 @@ public class ClickHouseClusterSpanConsumerTest {
     }
   }
 
-  // ==================== Тесты распределения спанов в кластере ====================
-
   @Test
   public void multipleConsumersDistributeSpansBetweenClusterNodes() {
-    ClickHouseSpanConsumer consumer1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer consumer2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer consumer3 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    ClickHouseSpanConsumer consumer1 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer consumer2 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer consumer3 = new ClickHouseSpanConsumer(mockClient, true);
 
     consumers.add(consumer1);
     consumers.add(consumer2);
@@ -72,7 +64,7 @@ public class ClickHouseClusterSpanConsumerTest {
   public void clusterHandlesSimultaneousSpanInsertion() throws InterruptedException {
     int numNodes = 3;
     for (int i = 0; i < numNodes; i++) {
-      consumers.add(new ClickHouseSpanConsumer(mockClient, "zipkin", true));
+      consumers.add(new ClickHouseSpanConsumer(mockClient, true));
     }
 
     int numThreads = 6;
@@ -109,9 +101,9 @@ public class ClickHouseClusterSpanConsumerTest {
   @Test
   @Timeout(45)
   public void clusterNodeFailureDoesNotBlockOthers() throws InterruptedException {
-    ClickHouseSpanConsumer healthyNode1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer healthyNode2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer failedNode = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    ClickHouseSpanConsumer healthyNode1 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer healthyNode2 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer failedNode = new ClickHouseSpanConsumer(mockClient, true);
 
     consumers.add(healthyNode1);
     consumers.add(healthyNode2);
@@ -166,7 +158,7 @@ public class ClickHouseClusterSpanConsumerTest {
     int numNodes = 3;
     List<ClickHouseSpanConsumer> clusterNodes = new ArrayList<>();
     for (int i = 0; i < numNodes; i++) {
-      ClickHouseSpanConsumer consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+      ClickHouseSpanConsumer consumer = new ClickHouseSpanConsumer(mockClient, true);
       clusterNodes.add(consumer);
       consumers.add(consumer);
     }
@@ -207,15 +199,13 @@ public class ClickHouseClusterSpanConsumerTest {
     }
   }
 
-  // ==================== Тесты балансировки нагрузки ====================
-
   @Test
   @Timeout(35)
   public void loadBalancingAcrossClusterNodes() throws InterruptedException {
     int numNodes = 3;
     List<ClickHouseSpanConsumer> clusterNodes = new ArrayList<>();
     for (int i = 0; i < numNodes; i++) {
-      clusterNodes.add(new ClickHouseSpanConsumer(mockClient, "zipkin", true));
+      clusterNodes.add(new ClickHouseSpanConsumer(mockClient, true));
       consumers.add(clusterNodes.get(i));
     }
 
@@ -235,7 +225,7 @@ public class ClickHouseClusterSpanConsumerTest {
     int numNodes = 3;
     List<ClickHouseSpanConsumer> clusterNodes = new ArrayList<>();
     for (int i = 0; i < numNodes; i++) {
-      clusterNodes.add(new ClickHouseSpanConsumer(mockClient, "zipkin", true));
+      clusterNodes.add(new ClickHouseSpanConsumer(mockClient, true));
       consumers.add(clusterNodes.get(i));
     }
 
@@ -248,13 +238,11 @@ public class ClickHouseClusterSpanConsumerTest {
     }
   }
 
-  // ==================== Тесты восстановления после сбоев ====================
-
   @Test
   @Timeout(40)
   public void clusterRecoveryAfterNodeRestart() throws InterruptedException {
-    ClickHouseSpanConsumer node1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer node2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    ClickHouseSpanConsumer node1 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer node2 = new ClickHouseSpanConsumer(mockClient, true);
 
     consumers.add(node1);
     consumers.add(node2);
@@ -265,7 +253,7 @@ public class ClickHouseClusterSpanConsumerTest {
     node1.close();
     consumers.remove(node1);
 
-    ClickHouseSpanConsumer node1Restarted = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+    ClickHouseSpanConsumer node1Restarted = new ClickHouseSpanConsumer(mockClient, true);
     consumers.add(node1Restarted);
 
     node1Restarted.accept(createTestSpans(5));
@@ -282,7 +270,7 @@ public class ClickHouseClusterSpanConsumerTest {
     List<ClickHouseSpanConsumer> clusterNodes = new ArrayList<>();
 
     for (int i = 0; i < numNodes; i++) {
-      ClickHouseSpanConsumer consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+      ClickHouseSpanConsumer consumer = new ClickHouseSpanConsumer(mockClient, true);
       clusterNodes.add(consumer);
       consumers.add(consumer);
     }
@@ -300,32 +288,11 @@ public class ClickHouseClusterSpanConsumerTest {
     assertTrue(duration < 120000, "Shutdown всех узлов должен завершиться за < 120 сек");
   }
 
-  // ==================== Тесты с разными конфигурациями узлов ====================
-
-  @Test
-  public void clusterWithDifferentDatabasesPerNode() {
-    ClickHouseSpanConsumer node1 = new ClickHouseSpanConsumer(mockClient, "zipkin_1", true);
-    ClickHouseSpanConsumer node2 = new ClickHouseSpanConsumer(mockClient, "zipkin_2", true);
-    ClickHouseSpanConsumer node3 = new ClickHouseSpanConsumer(mockClient, "zipkin_3", true);
-
-    consumers.add(node1);
-    consumers.add(node2);
-    consumers.add(node3);
-
-    node1.accept(createTestSpans(5));
-    node2.accept(createTestSpans(5));
-    node3.accept(createTestSpans(5));
-
-    assertNotNull(node1);
-    assertNotNull(node2);
-    assertNotNull(node3);
-  }
-
   @Test
   public void clusterWithMixedStrictTraceIdModes() {
-    ClickHouseSpanConsumer strictNode1 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer strictNode2 = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
-    ClickHouseSpanConsumer lenientNode = new ClickHouseSpanConsumer(mockClient, "zipkin", false);
+    ClickHouseSpanConsumer strictNode1 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer strictNode2 = new ClickHouseSpanConsumer(mockClient, true);
+    ClickHouseSpanConsumer lenientNode = new ClickHouseSpanConsumer(mockClient, false);
 
     consumers.add(strictNode1);
     consumers.add(strictNode2);
@@ -338,14 +305,12 @@ public class ClickHouseClusterSpanConsumerTest {
     assertTrue(true);
   }
 
-  // ==================== Тесты масштабирования кластера ====================
-
   @Test
   @Timeout(45)
   public void clusterScaleUp() throws InterruptedException {
     List<ClickHouseSpanConsumer> clusterNodes = new ArrayList<>();
     for (int i = 0; i < 2; i++) {
-      ClickHouseSpanConsumer consumer = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+      ClickHouseSpanConsumer consumer = new ClickHouseSpanConsumer(mockClient, true);
       clusterNodes.add(consumer);
       consumers.add(consumer);
     }
@@ -355,7 +320,7 @@ public class ClickHouseClusterSpanConsumerTest {
     }
 
     for (int i = 0; i < 2; i++) {
-      ClickHouseSpanConsumer newNode = new ClickHouseSpanConsumer(mockClient, "zipkin", true);
+      ClickHouseSpanConsumer newNode = new ClickHouseSpanConsumer(mockClient, true);
       clusterNodes.add(newNode);
       consumers.add(newNode);
     }
@@ -372,7 +337,7 @@ public class ClickHouseClusterSpanConsumerTest {
   public void clusterScaleDown() throws InterruptedException {
     List<ClickHouseSpanConsumer> clusterNodes = new ArrayList<>();
     for (int i = 0; i < 4; i++) {
-      clusterNodes.add(new ClickHouseSpanConsumer(mockClient, "zipkin", true));
+      clusterNodes.add(new ClickHouseSpanConsumer(mockClient, true));
     }
 
     for (int i = 0; i < 40; i++) {
@@ -395,8 +360,6 @@ public class ClickHouseClusterSpanConsumerTest {
     }
   }
 
-  // ==================== Тесты high availability ====================
-
   @Test
   @Timeout(45)
   public void highAvailabilityWithRedundancy() throws InterruptedException {
@@ -405,7 +368,7 @@ public class ClickHouseClusterSpanConsumerTest {
     List<ClickHouseSpanConsumer> allNodes = new ArrayList<>();
 
     for (int i = 0; i < primaryNodes + redundantNodes; i++) {
-      allNodes.add(new ClickHouseSpanConsumer(mockClient, "zipkin", true));
+      allNodes.add(new ClickHouseSpanConsumer(mockClient, true));
       consumers.add(allNodes.get(i));
     }
 
@@ -432,8 +395,6 @@ public class ClickHouseClusterSpanConsumerTest {
 
     assertEquals((primaryNodes + redundantNodes) * 10, totalProcessed.get());
   }
-
-  // ==================== Вспомогательные методы ====================
 
   private List<Span> createTestSpans(int count) {
     List<Span> spans = new ArrayList<>();

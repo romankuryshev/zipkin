@@ -17,36 +17,28 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private static final Logger log = LoggerFactory.getLogger(ClickHouseSpanConsumer.class);
 
   private final Client client;
-  private final String database;
   private final boolean strictTraceId;
   private final Set<String> autocompleteKeys;
-  private final int autocompleteTtl;
-  private final int autocompleteCardinality;
   private final AutocompleteTagsCache autocompleteTagsCache;
 
-  private static final int BATCH_SIZE = 1000;
+  private static final int BATCH_SIZE = 10000;
   private static final int AUTO_FLUSH_INTERVAL_MS = 5000;
 
-  private final Queue<Span> buffer = new ConcurrentLinkedQueue<>();
+  private Queue<Span> buffer = new ConcurrentLinkedQueue<>();
   private final ScheduledExecutorService scheduler;
   private final ReentrantLock lock = new ReentrantLock();
 
-  public ClickHouseSpanConsumer(Client client, String database, boolean strictTraceId) {
-    this(client, database, strictTraceId, Set.of(),
-      (int) TimeUnit.HOURS.toMillis(1), 5 * 4000,
+  public ClickHouseSpanConsumer(Client client, boolean strictTraceId) {
+    this(client, strictTraceId, Set.of(),
       new AutocompleteTagsCache((int) TimeUnit.HOURS.toMillis(1), 5 * 4000, Set.of()));
   }
 
-  public ClickHouseSpanConsumer(Client client, String database, boolean strictTraceId,
+  public ClickHouseSpanConsumer(Client client, boolean strictTraceId,
                                 Set<String> autocompleteKeys,
-                                int autocompleteTtl, int autocompleteCardinality,
                                 AutocompleteTagsCache autocompleteTagsCache) {
     this.client = client;
-    this.database = database;
     this.strictTraceId = strictTraceId;
     this.autocompleteKeys = autocompleteKeys;
-    this.autocompleteTtl = autocompleteTtl;
-    this.autocompleteCardinality = autocompleteCardinality;
     this.autocompleteTagsCache = autocompleteTagsCache;
     this.scheduler = Executors.newScheduledThreadPool(1, r -> {
       Thread t = new Thread(r, "ClickHouseBatchFlush");
@@ -62,23 +54,24 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
       return Call.create(null);
     }
 
-    buffer.addAll(spans);
 
+    Call<Void> insertCall = Call.create(null);
     // Check if we should flush immediately (batch size reached)
     if (buffer.size() >= BATCH_SIZE) {
-      return flushBuffer();
+      insertCall = flushBuffer();
     }
-    return Call.create(null);
+    buffer.addAll(spans);
+    return insertCall;
   }
 
   private Call<Void> flushBuffer() {
     lock.lock();
     try {
-      if (buffer.isEmpty()) {
+      if (buffer.size() < BATCH_SIZE) {
         return Call.create(null);
       }
       List<Span> toFlush = new ArrayList<>(buffer);
-      buffer.clear();
+      buffer = new ConcurrentLinkedQueue<>();
       return new InsertSpansCall(client, toFlush, strictTraceId, autocompleteKeys, autocompleteTagsCache);
     } finally {
       lock.unlock();
