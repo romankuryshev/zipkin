@@ -24,7 +24,7 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private final int autocompleteCardinality;
   private final AutocompleteTagsCache autocompleteTagsCache;
 
-  private static final int BATCH_SIZE = 10;
+  private static final int BATCH_SIZE = 1000;
   private static final int AUTO_FLUSH_INTERVAL_MS = 5000;
 
   private final Queue<Span> buffer = new ConcurrentLinkedQueue<>();
