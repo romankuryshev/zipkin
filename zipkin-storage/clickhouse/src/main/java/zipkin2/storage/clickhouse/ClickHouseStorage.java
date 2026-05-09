@@ -13,6 +13,7 @@ import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.SpanStore;
 import zipkin2.storage.StorageComponent;
 import zipkin2.storage.Traces;
+import java.io.IOException;
 import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 import zipkin2.storage.clickhouse.dto.DependencyRecord;
 import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
@@ -90,7 +91,7 @@ public class ClickHouseStorage extends StorageComponent {
 
   @Override
   public Traces traces() {
-    return new ClickHouseTraces(client, database);
+    return new ClickHouseTraces(client, database, includeSpanStatistics);
   }
 
   @Override
@@ -100,7 +101,7 @@ public class ClickHouseStorage extends StorageComponent {
 
   @Override
   public AutocompleteTags autocompleteTags() {
-    return new ClickHouseAutocompleteTags(client, database, autocompleteTagsCache);
+    return new ClickHouseAutocompleteTags(client, database, autocompleteKeys, autocompleteTagsCache);
   }
 
   public boolean isEnsureScheme() {
@@ -130,6 +131,12 @@ public class ClickHouseStorage extends StorageComponent {
 
   public AutocompleteTagsCache getAutocompleteTagsCache() {
     return autocompleteTagsCache;
+  }
+
+  // Package-private: called from integration tests via blockWhileInFlight() to ensure
+  // buffered spans are flushed to ClickHouse before read assertions.
+  void forceFlush() throws IOException {
+    spanConsumer.forceFlush();
   }
 
   public void close() {
@@ -169,7 +176,7 @@ public class ClickHouseStorage extends StorageComponent {
     client.register(ServiceOperationNameRecord.class, client.getTableSchema("service_operation_names"));
   }
 
-  public static class Builder {
+  public static class Builder extends StorageComponent.Builder {
 
     private String host;
     private int port;
@@ -185,9 +192,35 @@ public class ClickHouseStorage extends StorageComponent {
     private int maxSpansLimitMultiplier = 100;
     private boolean includeSpanStatistics = true;
 
-    public ClickHouseStorage build() {
+    @Override public ClickHouseStorage build() {
       return new ClickHouseStorage(this);
     }
+
+    // --- StorageComponent.Builder contract ---
+
+    @Override public Builder strictTraceId(boolean strictTraceId) {
+      this.strictTraceId = strictTraceId;
+      return this;
+    }
+
+    @Override public Builder searchEnabled(boolean searchEnabled) {
+      // ClickHouse storage does not distinguish search-enabled vs disabled yet.
+      return this;
+    }
+
+    @Override public Builder autocompleteKeys(List<String> keys) {
+      return setAutocompleteKeys(keys);
+    }
+
+    @Override public Builder autocompleteTtl(int autocompleteTtl) {
+      return setAutocompleteTtl(autocompleteTtl);
+    }
+
+    @Override public Builder autocompleteCardinality(int autocompleteCardinality) {
+      return setAutocompleteCardinality(autocompleteCardinality);
+    }
+
+    // --- ClickHouse-specific builder methods ---
 
     public Builder setHost(String host) {
       this.host = host;
@@ -220,8 +253,7 @@ public class ClickHouseStorage extends StorageComponent {
     }
 
     public Builder setStrictTraceId(boolean strictTraceId) {
-      this.strictTraceId = strictTraceId;
-      return this;
+      return strictTraceId(strictTraceId);
     }
 
     public Builder setAutocompleteKeys(List<String> keys) {

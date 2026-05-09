@@ -7,10 +7,14 @@ CREATE TABLE IF NOT EXISTS service_operation_names
 
 CREATE TABLE IF NOT EXISTS dependencies
 (
+  timestamp           DateTime64(6),
   local_service_name  LowCardinality(String),
-  remote_service_name LowCardinality(String)
-) ENGINE = ReplacingMergeTree
-    ORDER BY (local_service_name, remote_service_name);
+  remote_service_name LowCardinality(String),
+  call_count          UInt64 DEFAULT 1,
+  error_count         UInt64 DEFAULT 0
+) ENGINE = SummingMergeTree((call_count, error_count))
+    ORDER BY (local_service_name, remote_service_name, timestamp)
+    PARTITION BY toDate(timestamp);
 
 CREATE TABLE IF NOT EXISTS spans
 (
@@ -32,7 +36,9 @@ CREATE TABLE IF NOT EXISTS spans
   remote_endpoint_port         Nullable(UInt16),
   annotations                  Array(Tuple(timestamp DateTime64(6), value String)),
   tags                         Map(String, String),
-  status_code                  LowCardinality(String)
+  status_code                  LowCardinality(String),
+  shared                       UInt8 DEFAULT 0,
+  debug                        UInt8 DEFAULT 0
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
     ORDER BY (name, local_endpoint_service_name, kind)

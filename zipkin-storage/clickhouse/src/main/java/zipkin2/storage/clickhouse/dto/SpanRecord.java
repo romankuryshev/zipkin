@@ -28,6 +28,8 @@ public class SpanRecord {
   private List<Object[]> annotations;
   private Map<String, String> tags;
   private String statusCode;
+  private boolean shared;
+  private boolean debug;
 
   public SpanRecord() {
   }
@@ -99,6 +101,10 @@ public class SpanRecord {
   public void setTags(Map<String, String> tags) { this.tags = tags; }
   public String getStatusCode() { return statusCode; }
   public void setStatusCode(String statusCode) { this.statusCode = statusCode; }
+  public boolean isShared() { return shared; }
+  public void setShared(boolean shared) { this.shared = shared; }
+  public boolean isDebug() { return debug; }
+  public void setDebug(boolean debug) { this.debug = debug; }
 
   @Override
   public String toString() {

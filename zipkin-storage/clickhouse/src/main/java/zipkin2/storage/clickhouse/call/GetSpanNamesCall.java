@@ -11,7 +11,7 @@ public final class GetSpanNamesCall extends ClickHouseCall<List<String>> {
 
   public GetSpanNamesCall(Client client, String database, String serviceName) {
     super(client, database);
-    this.serviceName = serviceName;
+    this.serviceName = serviceName != null ? serviceName.toLowerCase(java.util.Locale.ROOT) : null;
   }
 
   @Override

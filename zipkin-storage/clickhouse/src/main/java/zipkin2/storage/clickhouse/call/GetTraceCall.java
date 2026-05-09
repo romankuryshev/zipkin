@@ -30,14 +30,14 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
     sql.append("SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, ")
       .append("s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, ")
       .append("s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, ")
-      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations");
+      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, s.shared, s.debug");
 
     if (includeSpanStatistics) {
       sql.append(", stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, ")
         .append("stats.success_count, stats.error_count, stats.total_count ");
     }
 
-    sql.append("FROM ").append(database).append(".spans s");
+    sql.append(" FROM ").append(database).append(".spans s");
 
     if (includeSpanStatistics) {
       sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));

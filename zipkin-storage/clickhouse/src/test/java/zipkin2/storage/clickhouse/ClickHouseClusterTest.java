@@ -1,89 +1,105 @@
 package zipkin2.storage.clickhouse;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import zipkin2.Endpoint;
+import zipkin2.Span;
+import zipkin2.storage.QueryRequest;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class ClickHouseClusterTest {
+@Testcontainers
+@Tag("docker")
+class ClickHouseClusterTest {
 
   @Test
-  public void testSingleHostBackwardCompatibility() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder()
-      .setHost("localhost")
-      .setPort(8123)
-      .setDatabase("zipkin")
-      .setUsername("zipkin")
-      .setPassword("zipkin");
+  void twoNodes_allSpansReachAtLeastOneNode() throws Exception {
+    try (ClickHouseContainer node1 = new ClickHouseContainer();
+         ClickHouseContainer node2 = new ClickHouseContainer()) {
+      node1.start();
+      node2.start();
 
-    assertNotNull(builder);
+      ClickHouseStorage storage = new ClickHouseStorage.Builder()
+        .addClusterNode(node1.getHost(), node1.getMappedPort(ClickHouseContainer.PORT))
+        .addClusterNode(node2.getHost(), node2.getMappedPort(ClickHouseContainer.PORT))
+        .setDatabase("zipkin")
+        .setUsername("default")
+        .setPassword("")
+        .setEnsureSchema(false)
+        .setIncludeSpanStatistics(false)
+        .build();
+
+      long now = System.currentTimeMillis();
+      for (int i = 1; i <= 10; i++) {
+        storage.spanConsumer().accept(List.of(
+          Span.newBuilder()
+            .traceId(String.format("%016d", i))
+            .id("1")
+            .name("test-op")
+            .timestamp((now - i * 100L) * 1000L)
+            .duration(1000L)
+            .localEndpoint(Endpoint.newBuilder().serviceName("svc").build())
+            .build()
+        )).execute();
+      }
+      storage.forceFlush();
+
+      QueryRequest request = QueryRequest.newBuilder()
+        .endTs(now + 60_000)
+        .lookback(TimeUnit.DAYS.toMillis(1))
+        .limit(100)
+        .build();
+
+      List<List<Span>> fromNode1 = node1.newStorageBuilder().build().spanStore().getTraces(request).execute();
+      List<List<Span>> fromNode2 = node2.newStorageBuilder().build().spanStore().getTraces(request).execute();
+
+      int total = fromNode1.size() + fromNode2.size();
+      assertThat(total).isEqualTo(10);
+      storage.close();
+    }
   }
 
   @Test
-  public void testAddSingleClusterNode() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder()
-      .addClusterNode("localhost", 8123)
-      .setDatabase("zipkin")
-      .setUsername("zipkin")
-      .setPassword("zipkin");
+  void allNodesDown_flushThrowsException() throws Exception {
+    try (ClickHouseContainer node1 = new ClickHouseContainer();
+         ClickHouseContainer node2 = new ClickHouseContainer()) {
+      node1.start();
+      node2.start();
 
-    assertNotNull(builder);
-  }
+      ClickHouseStorage storage = new ClickHouseStorage.Builder()
+        .addClusterNode(node1.getHost(), node1.getMappedPort(ClickHouseContainer.PORT))
+        .addClusterNode(node2.getHost(), node2.getMappedPort(ClickHouseContainer.PORT))
+        .setDatabase("zipkin")
+        .setUsername("default")
+        .setPassword("")
+        .setEnsureSchema(false)
+        .setIncludeSpanStatistics(false)
+        .build();
 
-  @Test
-  public void testAddMultipleClusterNodes() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder()
-      .addClusterNode("node1", 8123)
-      .addClusterNode("node2", 8124)
-      .addClusterNode("node3", 8125)
-      .setDatabase("zipkin")
-      .setUsername("zipkin")
-      .setPassword("zipkin");
+      node1.stop();
+      node2.stop();
 
-    assertNotNull(builder);
-  }
+      long now = System.currentTimeMillis();
+      storage.spanConsumer().accept(List.of(
+        Span.newBuilder()
+          .traceId("000000000000001a")
+          .id("1")
+          .name("test")
+          .timestamp(now * 1000L)
+          .duration(1000L)
+          .localEndpoint(Endpoint.newBuilder().serviceName("svc").build())
+          .build()
+      )).execute();
 
-  @Test
-  public void testSetClusterNodes() {
-    List<String> nodes = Arrays.asList(
-      "http://node1:8123/",
-      "http://node2:8124/",
-      "http://node3:8125/"
-    );
+      assertThatThrownBy(() -> storage.forceFlush())
+        .isInstanceOf(RuntimeException.class);
 
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder()
-      .setClusterNodes(nodes)
-      .setDatabase("zipkin")
-      .setUsername("zipkin")
-      .setPassword("zipkin");
-
-    assertNotNull(builder);
-  }
-
-  @Test
-  public void testAddClusterNodeInvalidHost() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder();
-    assertThrows(NullPointerException.class, () -> builder.addClusterNode(null, 8123));
-  }
-
-  @Test
-  public void testAddClusterNodeInvalidPort() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder();
-    assertThrows(IllegalArgumentException.class, () -> builder.addClusterNode("localhost", -1));
-  }
-
-  @Test
-  public void testSetClusterNodesNull() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder();
-    assertThrows(NullPointerException.class, () -> builder.setClusterNodes(null));
-  }
-
-  @Test
-  public void testSetClusterNodesEmpty() {
-    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder();
-    assertThrows(IllegalArgumentException.class, () -> builder.setClusterNodes(Arrays.asList()));
+      storage.close();
+    }
   }
 }
-

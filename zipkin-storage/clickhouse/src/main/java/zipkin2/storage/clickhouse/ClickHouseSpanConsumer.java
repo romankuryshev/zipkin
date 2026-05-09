@@ -90,6 +90,20 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
     }
   }
 
+  // Package-private: used by ClickHouseStorage.forceFlush() in integration tests to drain the
+  // buffer regardless of BATCH_SIZE, ensuring writes reach ClickHouse before assertions.
+  void forceFlush() throws java.io.IOException {
+    lock.lock();
+    try {
+      if (buffer.isEmpty()) return;
+      List<Span> toFlush = new ArrayList<>(buffer);
+      buffer = new ConcurrentLinkedQueue<>();
+      new InsertSpansCall(client, toFlush, strictTraceId, autocompleteKeys, autocompleteTagsCache).execute();
+    } finally {
+      lock.unlock();
+    }
+  }
+
   public void close() {
     try {
       // Flush remaining spans

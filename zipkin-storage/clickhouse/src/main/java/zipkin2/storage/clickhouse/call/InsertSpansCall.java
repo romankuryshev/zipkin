@@ -2,7 +2,9 @@ package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
 import zipkin2.Call;
+import zipkin2.DependencyLink;
 import zipkin2.Span;
+import zipkin2.internal.DependencyLinker;
 import zipkin2.storage.clickhouse.cache.AutocompleteTagsCache;
 import zipkin2.storage.clickhouse.dto.DependencyRecord;
 import zipkin2.storage.clickhouse.dto.ServiceOperationNameRecord;
@@ -32,25 +34,21 @@ public final class InsertSpansCall extends Call<Void> {
   @Override
   public Void execute() {
     try {
-      // 1. Convert Spans to SpanRecords and insert into spans table
       List<SpanRecord> spanRecords = convertToSpanRecords();
       if (!spanRecords.isEmpty()) {
         client.insert("spans", spanRecords).get();
       }
 
-      // 2. Extract and insert into service_operation_names table
       List<ServiceOperationNameRecord> serviceOpsRecords = new ArrayList<>(extractServiceOperationNames());
       if (!serviceOpsRecords.isEmpty()) {
         client.insert("service_operation_names", serviceOpsRecords).get();
       }
 
-      // 3. Extract and insert into dependencies table
-      List<DependencyRecord> depsRecords = new ArrayList<>(extractDependencies());
+      List<DependencyRecord> depsRecords = extractDependencies();
       if (!depsRecords.isEmpty()) {
         client.insert("dependencies", depsRecords).get();
       }
 
-      // 4. Insert autocomplete tag values if configured
       if (!autocompleteKeys.isEmpty()) {
         insertAutocompleteData();
       }
@@ -73,7 +71,6 @@ public final class InsertSpansCall extends Call<Void> {
 
   @Override
   public void cancel() {
-    // ClickHouse client v2 doesn't support cancellation
   }
 
   @Override
@@ -95,12 +92,16 @@ public final class InsertSpansCall extends Call<Void> {
     List<SpanRecord> records = new ArrayList<>();
 
     for (Span span : spans) {
-      boolean traceIdHigh = !strictTraceId && span.traceId().length() == 32;
-      String traceIdToUse = traceIdHigh ? span.traceId().substring(16) : span.traceId();
-      String traceIdHighStr = traceIdHigh ? span.traceId().substring(0, 16) : null;
-
-      BigInteger traceIdLow = parseHexStringToBigInteger(traceIdToUse);
-      BigInteger traceIdHighVal = traceIdHighStr != null ? parseHexStringToBigInteger(traceIdHighStr) : BigInteger.ZERO;
+      BigInteger traceIdLow, traceIdHighVal;
+      if (span.traceId().length() == 32) {
+        traceIdLow = parseHexStringToBigInteger(span.traceId().substring(16));
+        traceIdHighVal = strictTraceId
+          ? parseHexStringToBigInteger(span.traceId().substring(0, 16))
+          : BigInteger.ZERO;
+      } else {
+        traceIdLow = parseHexStringToBigInteger(span.traceId());
+        traceIdHighVal = BigInteger.ZERO;
+      }
       BigInteger parentIdVal = span.parentId() != null && !span.parentId().isEmpty()
         ? parseHexStringToBigInteger(span.parentId())
         : null;
@@ -129,6 +130,8 @@ public final class InsertSpansCall extends Call<Void> {
         span.tags(),
         statusCode
       );
+      record.setShared(Boolean.TRUE.equals(span.shared()));
+      record.setDebug(Boolean.TRUE.equals(span.debug()));
 
       records.add(record);
     }
@@ -152,23 +155,36 @@ public final class InsertSpansCall extends Call<Void> {
     return records;
   }
 
-  private Set<DependencyRecord> extractDependencies() {
-    Set<DependencyRecord> records = new HashSet<>();
-
+  private List<DependencyRecord> extractDependencies() {
+    Map<String, List<Span>> traceGroups = new LinkedHashMap<>();
     for (Span span : spans) {
-      String localService = getServiceName(span);
-      String remoteService = null;
-
-      if (span.remoteEndpoint() != null && span.remoteEndpoint().serviceName() != null) {
-        remoteService = span.remoteEndpoint().serviceName();
-      }
-
-      if (localService != null && !localService.isEmpty() &&
-          remoteService != null && !remoteService.isEmpty()) {
-        records.add(new DependencyRecord(localService, remoteService));
-      }
+      String traceId = span.traceId();
+      String groupKey = traceId.length() > 16 ? traceId.substring(traceId.length() - 16) : traceId;
+      traceGroups.computeIfAbsent(groupKey, k -> new ArrayList<>()).add(span);
     }
 
+    List<DependencyRecord> records = new ArrayList<>();
+    for (Map.Entry<String, List<Span>> entry : traceGroups.entrySet()) {
+      List<Span> traceSpans = entry.getValue();
+
+      long minTimestampMicros = Long.MAX_VALUE;
+      for (Span span : traceSpans) {
+        long ts = span.timestampAsLong();
+        if (ts > 0 && ts < minTimestampMicros) {
+          minTimestampMicros = ts;
+        }
+      }
+      java.time.Instant batchTimestamp = minTimestampMicros != Long.MAX_VALUE
+        ? convertTimestampToInstant(minTimestampMicros)
+        : java.time.Instant.now();
+
+      DependencyLinker linker = new DependencyLinker();
+      linker.putTrace(traceSpans);
+      for (DependencyLink link : linker.link()) {
+        records.add(new DependencyRecord(batchTimestamp, link.parent(), link.child(),
+          link.callCount(), link.errorCount()));
+      }
+    }
     return records;
   }
 
@@ -221,7 +237,6 @@ public final class InsertSpansCall extends Call<Void> {
     if (timestampMicros <= 0) {
       return java.time.Instant.EPOCH;
     }
-    // Конвертируем микросекунды в секунды и наносекунды
     long seconds = timestampMicros / 1_000_000;
     long nanos = (timestampMicros % 1_000_000) * 1_000;
     return java.time.Instant.ofEpochSecond(seconds, nanos);

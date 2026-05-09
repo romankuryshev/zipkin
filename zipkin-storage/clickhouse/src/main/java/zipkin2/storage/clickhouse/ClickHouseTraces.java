@@ -17,10 +17,12 @@ public class ClickHouseTraces implements Traces {
 
   private final Client client;
   private final String database;
+  private final boolean includeSpanStatistics;
 
-  public ClickHouseTraces(Client client, String database) {
+  public ClickHouseTraces(Client client, String database, boolean includeSpanStatistics) {
     this.client = client;
     this.database = database;
+    this.includeSpanStatistics = includeSpanStatistics;
   }
 
   /**
@@ -32,7 +34,7 @@ public class ClickHouseTraces implements Traces {
    */
   @Override
   public Call<List<Span>> getTrace(String traceId) {
-    return new GetTraceCall(client, database, traceId);
+    return new GetTraceCall(client, database, traceId, includeSpanStatistics);
   }
 
   /**
@@ -44,7 +46,7 @@ public class ClickHouseTraces implements Traces {
    */
   @Override
   public Call<List<List<Span>>> getTraces(Iterable<String> traceIds) {
-    return new GetTracesByIdCall(client, database, traceIds);
+    return new GetTracesByIdCall(client, database, traceIds, includeSpanStatistics);
   }
 
   @Override

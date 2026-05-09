@@ -1,55 +1,56 @@
 package zipkin2.storage.clickhouse.dto;
 
-/**
- * DTO for dependencies table in ClickHouse.
- * Maps to columns: local_service_name, remote_service_name
- */
+import java.time.Instant;
+
 public class DependencyRecord {
+  private Instant timestamp;
   private String localServiceName;
   private String remoteServiceName;
+  private long callCount;
+  private long errorCount;
 
   public DependencyRecord() {
   }
 
-  public DependencyRecord(String localServiceName, String remoteServiceName) {
+  public DependencyRecord(Instant timestamp, String localServiceName, String remoteServiceName,
+                          long callCount, long errorCount) {
+    this.timestamp = timestamp;
     this.localServiceName = localServiceName;
     this.remoteServiceName = remoteServiceName;
+    this.callCount = callCount;
+    this.errorCount = errorCount;
   }
 
-  public String getLocalServiceName() {
-    return localServiceName;
-  }
+  public Instant getTimestamp() { return timestamp; }
+  public void setTimestamp(Instant v) { this.timestamp = v; }
 
-  public void setLocalServiceName(String localServiceName) {
-    this.localServiceName = localServiceName;
-  }
+  public String getLocalServiceName() { return localServiceName; }
+  public void setLocalServiceName(String v) { this.localServiceName = v; }
 
-  public String getRemoteServiceName() {
-    return remoteServiceName;
-  }
+  public String getRemoteServiceName() { return remoteServiceName; }
+  public void setRemoteServiceName(String v) { this.remoteServiceName = v; }
 
-  public void setRemoteServiceName(String remoteServiceName) {
-    this.remoteServiceName = remoteServiceName;
-  }
+  public long getCallCount() { return callCount; }
+  public void setCallCount(long v) { this.callCount = v; }
+
+  public long getErrorCount() { return errorCount; }
+  public void setErrorCount(long v) { this.errorCount = v; }
 
   @Override
   public String toString() {
-    return "DependencyRecord{" +
-      "localServiceName='" + localServiceName + '\'' +
-      ", remoteServiceName='" + remoteServiceName + '\'' +
-      '}';
+    return "DependencyRecord{" + localServiceName + "->" + remoteServiceName
+      + " calls=" + callCount + " errors=" + errorCount + '}';
   }
 
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-
+    if (!(o instanceof DependencyRecord)) return false;
     DependencyRecord that = (DependencyRecord) o;
-
-    if (localServiceName != null ? !localServiceName.equals(that.localServiceName) : that.localServiceName != null)
-      return false;
-    return remoteServiceName != null ? remoteServiceName.equals(that.remoteServiceName) : that.remoteServiceName == null;
+    return localServiceName != null ? localServiceName.equals(that.localServiceName)
+        : that.localServiceName == null
+      && (remoteServiceName != null ? remoteServiceName.equals(that.remoteServiceName)
+          : that.remoteServiceName == null);
   }
 
   @Override

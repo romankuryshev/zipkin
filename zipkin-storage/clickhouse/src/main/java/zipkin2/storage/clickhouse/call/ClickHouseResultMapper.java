@@ -38,32 +38,24 @@ public final class ClickHouseResultMapper {
       "AND s.local_endpoint_service_name = stats.service_name";
   }
 
-  /**
-   * Преобразует одну строку результата в объект Span
-   */
   static Span toSpan(Map<String, Object> record) {
     Span.Builder builder = Span.newBuilder();
 
-    // trace_id: combine trace_id and trace_id_high
     BigInteger traceIdLow = getBigInteger(record.get("trace_id"));
     BigInteger traceIdHigh = getBigInteger(record.get("trace_id_high"));
     String traceId = combineTraceId(traceIdLow, traceIdHigh);
     builder.traceId(traceId);
 
-    // span_id
     BigInteger spanIdBig = getBigInteger(record.get("span_id"));
     builder.id(spanIdBig != null ? spanIdBig.toString(16) : "0");
 
-    // parent_id
     BigInteger parentIdBig = getBigInteger(record.get("parent_id"));
     if (parentIdBig != null && parentIdBig.compareTo(BigInteger.ZERO) > 0) {
       builder.parentId(parentIdBig.toString(16));
     }
 
-    // name
     builder.name((String) record.get("name"));
 
-    // local_endpoint (flat schema)
     String localServiceName = (String) record.get("local_endpoint_service_name");
     Inet4Address localIpv4 = (Inet4Address) record.get("local_endpoint_ipv4");
     Inet6Address localIpv6 = (Inet6Address) record.get("local_endpoint_ipv6");
@@ -86,7 +78,6 @@ public final class ClickHouseResultMapper {
       builder.localEndpoint(localEndpointBuilder.build());
     }
 
-    // remote_endpoint (flat schema)
     String remoteServiceName = (String) record.get("remote_endpoint_service_name");
     Inet4Address remoteIpv4 = (Inet4Address) record.get("remote_endpoint_ipv4");
     Inet6Address remoteIpv6 = (Inet6Address) record.get("remote_endpoint_ipv6");
@@ -127,12 +118,6 @@ public final class ClickHouseResultMapper {
       builder.duration(duration);
     }
 
-    String statusCode = (String) record.get("status_code");
-    if (statusCode != null && !statusCode.isEmpty()) {
-      builder.putTag("status.code", statusCode);
-    }
-
-    // Add statistics if available
     BigDecimal medianDuration = getBigDecimal(record.get("median_duration"));
     BigDecimal averageDuration = getBigDecimal(record.get("average_duration"));
     BigDecimal p50 = getBigDecimal(record.get("p50"));
@@ -171,15 +156,48 @@ public final class ClickHouseResultMapper {
     List<Object> annotationsList = ((BinaryStreamReader.ArrayValue) record.get("annotations")).asList();
     if (annotationsList != null && !annotationsList.isEmpty()) {
       for (Object annObj : annotationsList) {
-        // Annotations are stored as tuples (timestamp, value)
         if (annObj instanceof Map) {
           @SuppressWarnings("unchecked")
           Map<String, Object> annMap = (Map<String, Object>) annObj;
-          long annTimestamp = getLong(annMap.get("timestamp"));
+          Long annTimestamp = getLong(annMap.get("timestamp"));
           String annValue = (String) annMap.get("value");
-          builder.addAnnotation(annTimestamp, annValue);
+          if (annTimestamp != null && annValue != null) {
+            builder.addAnnotation(annTimestamp, annValue);
+          }
+        } else if (annObj instanceof List) {
+          @SuppressWarnings("unchecked")
+          List<Object> annList = (List<Object>) annObj;
+          if (annList.size() >= 2) {
+            Long annTimestamp = getLong(annList.get(0));
+            Object val = annList.get(1);
+            String annValue = val instanceof String ? (String) val : null;
+            if (annTimestamp != null && annValue != null) {
+              builder.addAnnotation(annTimestamp, annValue);
+            }
+          }
+        } else if (annObj instanceof Object[]) {
+          Object[] annArr = (Object[]) annObj;
+          if (annArr.length >= 2) {
+            Long annTimestamp = getLong(annArr[0]);
+            String annValue = annArr[1] instanceof String ? (String) annArr[1] : null;
+            if (annTimestamp != null && annValue != null) {
+              builder.addAnnotation(annTimestamp, annValue);
+            }
+          }
         }
       }
+    }
+
+    Object sharedVal = record.get("shared");
+    if (sharedVal != null) {
+      int s = sharedVal instanceof Number ? ((Number) sharedVal).intValue() : 0;
+      if (s == 1) builder.shared(true);
+    }
+
+    Object debugVal = record.get("debug");
+    if (debugVal != null) {
+      int d = debugVal instanceof Number ? ((Number) debugVal).intValue() : 0;
+      if (d == 1) builder.debug(true);
     }
 
     return builder.build();
@@ -229,8 +247,8 @@ public final class ClickHouseResultMapper {
     try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {
       while (reader.hasNext()) {
         Map<String, Object> record = reader.next();
-        String parent = (String) record.get("local_service_name");
-        String child = (String) record.get("remote_service_name");
+        String child = (String) record.get("local_service_name");
+        String parent = (String) record.get("remote_service_name");
         if (parent != null && !parent.isEmpty() && child != null && !child.isEmpty()) {
           links.add(DependencyLink.newBuilder()
             .parent(parent)
@@ -246,9 +264,6 @@ public final class ClickHouseResultMapper {
     return links;
   }
 
-  /**
-   * Объединяет trace_id_high и trace_id_low в одну hex строку
-   */
   private static String combineTraceId(BigInteger traceIdLow, BigInteger traceIdHigh) {
     if (traceIdLow == null) traceIdLow = BigInteger.ZERO;
     if (traceIdHigh == null) traceIdHigh = BigInteger.ZERO;
@@ -256,15 +271,13 @@ public final class ClickHouseResultMapper {
     String lowHex = traceIdLow.toString(16);
     String highHex = traceIdHigh.toString(16);
 
-    // Pad low to 16 characters
     lowHex = String.format("%16s", lowHex).replace(' ', '0');
 
-    // If high is 0, return only low (16 chars)
     if (traceIdHigh.compareTo(BigInteger.ZERO) == 0) {
       return lowHex;
     }
 
-    // Return high + low (32 chars total)
+    highHex = String.format("%16s", highHex).replace(' ', '0');
     return highHex + lowHex;
   }
 
@@ -275,7 +288,7 @@ public final class ClickHouseResultMapper {
     if (value instanceof BigInteger) return ((BigInteger) value).longValue();
     if (value instanceof ZonedDateTime) {
       Instant instant = ((ZonedDateTime) value).toInstant();
-      return instant.toEpochMilli() * 1000 + instant.getNano() / 1000;
+      return instant.getEpochSecond() * 1_000_000L + instant.getNano() / 1_000L;
     }
     if (value instanceof String) {
       try {
