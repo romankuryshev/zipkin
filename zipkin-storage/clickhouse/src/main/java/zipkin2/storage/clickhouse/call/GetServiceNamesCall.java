@@ -18,7 +18,7 @@ public final class GetServiceNamesCall extends ClickHouseCall<List<String>> {
 
     QueryResponse response = null;
     try {
-      response = client.query(sql).get();
+      response = client.query(sql, java.util.Collections.emptyMap(), newQuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

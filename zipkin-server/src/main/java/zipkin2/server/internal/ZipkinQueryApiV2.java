@@ -193,32 +193,6 @@ public class ZipkinQueryApiV2 {
     return maybeCacheNames(values.size() > 3, values, ctx.alloc());
   }
 
-  @Get("/api/v2/span-statistics")
-  @Blocking
-  public AggregatedHttpResponse getSpanStatistics(
-    @Param("serviceName") String serviceName,
-    @Param("spanName") String spanName,
-    @Param("spanKind") Optional<String> spanKind,
-    @Param("endTs") Optional<Long> endTs,
-    @Param("lookback") Optional<Long> lookback) throws IOException {
-
-    if (serviceName == null || serviceName.isEmpty()) {
-      return AggregatedHttpResponse.of(BAD_REQUEST, ANY_TEXT_TYPE, "serviceName parameter is required");
-    }
-    if (spanName == null || spanName.isEmpty()) {
-      return AggregatedHttpResponse.of(BAD_REQUEST, ANY_TEXT_TYPE, "spanName parameter is required");
-    }
-
-    zipkin2.storage.SpanStatistics stats = storage.spanStore().getSpanStatistics(
-      serviceName,
-      spanName,
-      spanKind.orElse(null),
-      endTs.orElse(System.currentTimeMillis()),
-      lookback.orElse(defaultLookback)
-    ).execute();
-
-    return jsonResponse(writeSpanStatistics(stats));
-  }
 
   /**
    * We cache names if there are more than 3 names. This helps people getting started: if we cache

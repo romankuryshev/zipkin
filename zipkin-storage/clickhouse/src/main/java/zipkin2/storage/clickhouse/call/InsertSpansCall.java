@@ -14,8 +14,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
-public final class InsertSpansCall extends Call<Void> {
-  private final Client client;
+public final class InsertSpansCall extends ClickHouseCall<Void> {
   private final List<Span> spans;
   private final boolean strictTraceId;
   private final Set<String> autocompleteKeys;
@@ -24,7 +23,7 @@ public final class InsertSpansCall extends Call<Void> {
   public InsertSpansCall(Client client, List<Span> spans, boolean strictTraceId,
                          Set<String> autocompleteKeys,
                          AutocompleteTagsCache autocompleteTagsCache) {
-    this.client = client;
+    super(client, null);
     this.spans = spans;
     this.strictTraceId = strictTraceId;
     this.autocompleteKeys = autocompleteKeys;
@@ -32,21 +31,21 @@ public final class InsertSpansCall extends Call<Void> {
   }
 
   @Override
-  public Void execute() {
+  protected Void doExecute() {
     try {
       List<SpanRecord> spanRecords = convertToSpanRecords();
       if (!spanRecords.isEmpty()) {
-        client.insert("spans", spanRecords).get();
+        client.insert("spans", spanRecords, newInsertSettings()).get();
       }
 
       List<ServiceOperationNameRecord> serviceOpsRecords = new ArrayList<>(extractServiceOperationNames());
       if (!serviceOpsRecords.isEmpty()) {
-        client.insert("service_operation_names", serviceOpsRecords).get();
+        client.insert("service_operation_names", serviceOpsRecords, newInsertSettings()).get();
       }
 
       List<DependencyRecord> depsRecords = extractDependencies();
       if (!depsRecords.isEmpty()) {
-        client.insert("dependencies", depsRecords).get();
+        client.insert("dependencies", depsRecords, newInsertSettings()).get();
       }
 
       if (!autocompleteKeys.isEmpty()) {
@@ -60,27 +59,8 @@ public final class InsertSpansCall extends Call<Void> {
   }
 
   @Override
-  public void enqueue(zipkin2.Callback<Void> callback) {
-    try {
-      execute();
-      callback.onSuccess(null);
-    } catch (Throwable e) {
-      callback.onError(e);
-    }
-  }
-
-  @Override
-  public void cancel() {
-  }
-
-  @Override
-  public boolean isCanceled() {
-    return false;
-  }
-
-  @Override
   public Call<Void> clone() {
-    return this;
+    return new InsertSpansCall(client, spans, strictTraceId, autocompleteKeys, autocompleteTagsCache);
   }
 
   @Override

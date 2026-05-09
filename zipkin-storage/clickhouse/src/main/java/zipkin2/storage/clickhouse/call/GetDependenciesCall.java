@@ -40,8 +40,7 @@ public final class GetDependenciesCall extends ClickHouseCall<List<DependencyLin
     params.put("endTsMicros", endTsMicros);
 
     try {
-      QueryResponse response = client.query(sql, params,
-        new com.clickhouse.client.api.query.QuerySettings()).get();
+      QueryResponse response = client.query(sql, params, newQuerySettings()).get();
 
       List<DependencyLink> links = new ArrayList<>();
       try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {

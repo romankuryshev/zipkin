@@ -50,7 +50,7 @@ public final class GetAutocompleteValuesCall extends ClickHouseCall<List<String>
 
     QueryResponse response = null;
     try {
-      response = client.query(sql, queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
+      response = client.query(sql, queryParams, newQuerySettings()).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

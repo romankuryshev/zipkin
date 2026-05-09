@@ -52,7 +52,7 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
     queryParams.put("traceIdHigh", traceParts[1]);
 
     try {
-      QueryResponse response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
+      QueryResponse response = client.query(sql.toString(), queryParams, newQuerySettings()).get();
       return ClickHouseResultMapper.toSpans(response, client);
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);

@@ -68,7 +68,7 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
     sql.append(" ORDER BY s.timestamp DESC");
 
     try {
-      QueryResponse response = client.query(sql.toString(), queryParams, new com.clickhouse.client.api.query.QuerySettings()).get();
+      QueryResponse response = client.query(sql.toString(), queryParams, newQuerySettings()).get();
       List<Span> spans = ClickHouseResultMapper.toSpans(response, client);
       return ClickHouseResultMapper.groupSpansByTraceId(spans);
     } catch (InterruptedException | ExecutionException e) {
