@@ -121,6 +121,14 @@ class GetTracesCallSqlTest {
   }
 
   @Test
+  void innerQuery_usesLimitByInsteadOfGroupBy() {
+    String sql = capturedSql(new GetTracesCall(client, "zipkin", defaultRequest, 3, false));
+    assertFalse(sql.contains("GROUP BY trace_id"), "GROUP BY forces full aggregation scan — use LIMIT BY instead");
+    assertTrue(sql.contains("LIMIT 1 BY (trace_id, trace_id_high)"), "LIMIT BY enables early-stop once enough distinct traces found");
+    assertTrue(sql.contains("ORDER BY timestamp DESC"), "Inner query must order by timestamp DESC for LIMIT BY to pick most-recent span per trace");
+  }
+
+  @Test
   void withStatistics_withServiceName_statsJoinFiltersServiceName() {
     QueryRequest request = QueryRequest.newBuilder()
       .endTs(System.currentTimeMillis())

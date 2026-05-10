@@ -51,6 +51,14 @@ ALTER TABLE spans
     ORDER BY (trace_id)
     );
 
+-- Enables early-stop LIMIT BY for "most recent traces per service" queries
+ALTER TABLE spans
+  ADD PROJECTION IF NOT EXISTS spans_prj_service_ts
+    (
+    SELECT *
+    ORDER BY (local_endpoint_service_name, timestamp DESC, trace_id, trace_id_high)
+    );
+
 ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
 ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
 

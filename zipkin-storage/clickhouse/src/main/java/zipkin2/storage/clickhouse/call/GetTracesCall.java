@@ -81,8 +81,8 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
       }
     }
 
-    inner.append(" GROUP BY trace_id, trace_id_high")
-      .append(" ORDER BY max(timestamp) DESC")
+    inner.append(" ORDER BY timestamp DESC")
+      .append(" LIMIT 1 BY (trace_id, trace_id_high)")
       .append(" LIMIT ").append(request.limit());
 
     StringBuilder sql = new StringBuilder();
