@@ -1,13 +1,12 @@
 package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
-import com.clickhouse.client.api.query.QueryResponse;
+import com.clickhouse.client.api.query.GenericRecord;
 import zipkin2.Call;
 import zipkin2.Span;
 import zipkin2.storage.QueryRequest;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   private final QueryRequest request;
@@ -117,13 +116,9 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
       .append(" ORDER BY s.timestamp DESC")
       .append(" LIMIT ").append((long) request.limit() * maxSpansLimitMultiplier);
 
-    try {
-      QueryResponse response = client.query(sql.toString(), queryParams, newQuerySettings()).get();
-      List<Span> spans = ClickHouseResultMapper.toSpans(response, client, includeSpanStatistics);
-      return ClickHouseResultMapper.groupSpansByTraceId(spans);
-    } catch (InterruptedException | ExecutionException e) {
-      throw new RuntimeException(e);
-    }
+    List<GenericRecord> rows = client.queryAll(sql.toString(), queryParams, newQuerySettings());
+    List<Span> spans = ClickHouseResultMapper.toSpans(rows, includeSpanStatistics);
+    return ClickHouseResultMapper.groupSpansByTraceId(spans);
   }
 
   @Override

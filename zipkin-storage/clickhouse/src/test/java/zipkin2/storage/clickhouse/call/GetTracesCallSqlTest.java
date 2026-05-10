@@ -1,15 +1,13 @@
 package zipkin2.storage.clickhouse.call;
 
 import com.clickhouse.client.api.Client;
-import com.clickhouse.client.api.data_formats.ClickHouseBinaryFormatReader;
-import com.clickhouse.client.api.query.QueryResponse;
 import com.clickhouse.client.api.query.QuerySettings;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import zipkin2.storage.QueryRequest;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -22,16 +20,10 @@ class GetTracesCallSqlTest {
   private QueryRequest defaultRequest;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     client = mock(Client.class);
-    QueryResponse mockResponse = mock(QueryResponse.class);
-    ClickHouseBinaryFormatReader mockReader = mock(ClickHouseBinaryFormatReader.class);
-
-    when(client.query(anyString(), anyMap(), any(QuerySettings.class)))
-      .thenReturn(CompletableFuture.completedFuture(mockResponse));
-    when(client.newBinaryFormatReader(mockResponse)).thenReturn(mockReader);
-    when(mockReader.hasNext()).thenReturn(false);
+    when(client.queryAll(anyString(), anyMap(), any(QuerySettings.class)))
+      .thenReturn(List.of());
 
     sqlCaptor = ArgumentCaptor.forClass(String.class);
     defaultRequest = QueryRequest.newBuilder()
@@ -43,7 +35,7 @@ class GetTracesCallSqlTest {
 
   private String capturedSql(GetTracesCall call) {
     call.doExecute();
-    verify(client).query(sqlCaptor.capture(), anyMap(), any(QuerySettings.class));
+    verify(client).queryAll(sqlCaptor.capture(), anyMap(), any(QuerySettings.class));
     return sqlCaptor.getValue();
   }
 

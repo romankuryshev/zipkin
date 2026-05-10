@@ -3,6 +3,7 @@ package zipkin2.storage.clickhouse.call;
 import com.clickhouse.client.api.Client;
 import com.clickhouse.client.api.data_formats.ClickHouseBinaryFormatReader;
 import com.clickhouse.client.api.data_formats.internal.BinaryStreamReader;
+import com.clickhouse.client.api.query.GenericRecord;
 import com.clickhouse.client.api.query.QueryResponse;
 import zipkin2.DependencyLink;
 import zipkin2.Endpoint;
@@ -309,6 +310,128 @@ public final class ClickHouseResultMapper {
 
     return builder.build();
   }
+
+  // ── GenericRecord path (used by queryAll) ───────────────────────────────────
+
+  static List<Span> toSpans(List<GenericRecord> rows, boolean includeSpanStatistics) {
+    List<Span> spans = new ArrayList<>(rows.size());
+    for (GenericRecord row : rows) {
+      spans.add(toSpanFromGenericRecord(row, includeSpanStatistics));
+    }
+    return spans;
+  }
+
+  private static long readUInt64(GenericRecord row, String col) {
+    BigInteger v = row.getBigInteger(col);
+    return v != null ? v.longValue() : 0L;
+  }
+
+  private static long readUInt64Nullable(GenericRecord row, String col) {
+    if (!row.hasValue(col)) return 0L;
+    BigInteger v = row.getBigInteger(col);
+    return v != null ? v.longValue() : 0L;
+  }
+
+  private static Span toSpanFromGenericRecord(GenericRecord row, boolean includeSpanStatistics) {
+    Span.Builder builder = Span.newBuilder();
+
+    long traceIdLow  = readUInt64(row, "trace_id");
+    long traceIdHigh = readUInt64(row, "trace_id_high");
+    builder.traceId(traceIdHigh == 0L ? toHex16(traceIdLow)
+                                      : toHex16(traceIdHigh) + toHex16(traceIdLow));
+
+    builder.id(Long.toHexString(readUInt64(row, "span_id")));
+
+    long parentId = readUInt64Nullable(row, "parent_id");
+    if (parentId != 0L) builder.parentId(Long.toHexString(parentId));
+
+    String spanName = row.getString("name");
+    builder.name(spanName);
+
+    String localSvc  = row.getString("local_endpoint_service_name");
+    Inet4Address localIpv4 = row.hasValue("local_endpoint_ipv4") ? row.getInet4Address("local_endpoint_ipv4") : null;
+    Inet6Address localIpv6 = row.hasValue("local_endpoint_ipv6") ? row.getInet6Address("local_endpoint_ipv6") : null;
+    Integer localPort      = row.hasValue("local_endpoint_port")  ? row.getInteger("local_endpoint_port")      : null;
+    if (localSvc != null || localIpv4 != null || localIpv6 != null || localPort != null) {
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (localSvc != null && !localSvc.isEmpty()) ep.serviceName(localSvc);
+      if (localIpv4 != null) ep.parseIp(localIpv4);
+      if (localIpv6 != null) ep.parseIp(localIpv6);
+      if (localPort != null) ep.port(localPort);
+      builder.localEndpoint(ep.build());
+    }
+
+    String remoteSvc  = row.getString("remote_endpoint_service_name");
+    Inet4Address remoteIpv4 = row.hasValue("remote_endpoint_ipv4") ? row.getInet4Address("remote_endpoint_ipv4") : null;
+    Inet6Address remoteIpv6 = row.hasValue("remote_endpoint_ipv6") ? row.getInet6Address("remote_endpoint_ipv6") : null;
+    Integer remotePort      = row.hasValue("remote_endpoint_port")  ? row.getInteger("remote_endpoint_port")      : null;
+    if (remoteSvc != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (remoteSvc != null && !remoteSvc.isEmpty()) ep.serviceName(remoteSvc);
+      if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
+      if (remoteIpv6 != null) ep.parseIp(remoteIpv6);
+      if (remotePort != null) ep.port(remotePort);
+      builder.remoteEndpoint(ep.build());
+    }
+
+    String spanKind = row.getString("kind");
+    if (spanKind != null && !spanKind.isEmpty()) {
+      try { builder.kind(Span.Kind.valueOf(spanKind)); } catch (IllegalArgumentException ignored) {}
+    }
+
+    ZonedDateTime ts = row.getZonedDateTime("timestamp");
+    if (ts != null) {
+      Instant tsi = ts.toInstant();
+      long tsMicros = tsi.getEpochSecond() * 1_000_000L + tsi.getNano() / 1_000L;
+      if (tsMicros > 0) builder.timestamp(tsMicros);
+    }
+
+    long duration = readUInt64(row, "duration");
+    if (duration > 0) builder.duration(duration);
+
+    if (includeSpanStatistics) {
+      BigDecimal medianDuration  = row.hasValue("median_duration")  ? row.getBigDecimal("median_duration")  : null;
+      BigDecimal averageDuration = row.hasValue("average_duration") ? row.getBigDecimal("average_duration") : null;
+      BigDecimal p50 = row.hasValue("p50") ? row.getBigDecimal("p50") : null;
+      BigDecimal p95 = row.hasValue("p95") ? row.getBigDecimal("p95") : null;
+      BigDecimal p99 = row.hasValue("p99") ? row.getBigDecimal("p99") : null;
+      Long successCount = row.hasValue("success_count") ? readUInt64(row, "success_count") : null;
+      Long errorCount   = row.hasValue("error_count")   ? readUInt64(row, "error_count")   : null;
+      Long totalCount   = row.hasValue("total_count")   ? readUInt64(row, "total_count")   : null;
+      if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
+          p99 != null || successCount != null || errorCount != null || totalCount != null) {
+        builder.statistics(new SpanStatistics(
+          spanName, spanKind != null ? spanKind : "",
+          medianDuration  != null ? medianDuration  : BigDecimal.ZERO,
+          averageDuration != null ? averageDuration : BigDecimal.ZERO,
+          p50 != null ? p50 : BigDecimal.ZERO,
+          p95 != null ? p95 : BigDecimal.ZERO,
+          p99 != null ? p99 : BigDecimal.ZERO,
+          successCount != null ? successCount : 0L,
+          errorCount   != null ? errorCount   : 0L,
+          totalCount   != null ? totalCount   : 0L
+        ));
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, String> tags = (Map<String, String>) row.getObject("tags");
+    if (tags != null) {
+      for (Map.Entry<String, String> tag : tags.entrySet()) {
+        builder.putTag(tag.getKey(), tag.getValue());
+      }
+    }
+
+    List<Object> annList = row.getList("annotations");
+    if (annList != null && !annList.isEmpty()) readAnnotations(builder, annList);
+
+    if (row.getByte("shared") == 1) builder.shared(true);
+    if (row.getByte("debug") == 1) builder.debug(true);
+
+    return builder.build();
+  }
+
+  // ── QueryResponse / BinaryFormatReader path (used by GetTraceCall, GetTracesByIdCall) ──
 
   static List<Span> toSpans(QueryResponse response, Client client) {
     return toSpans(response, client, true);
