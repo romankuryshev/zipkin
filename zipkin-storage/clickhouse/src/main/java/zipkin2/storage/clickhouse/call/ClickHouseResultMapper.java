@@ -33,6 +33,19 @@ public final class ClickHouseResultMapper {
     return new String(buf);
   }
 
+  /**
+   * Reads a UInt64 column as a Java long (raw 64-bit two's complement).
+   * reader.getLong() throws ArithmeticException for values > Long.MAX_VALUE,
+   * so we go through readValue() which returns BigInteger, then take the low 64 bits.
+   * This is safe for hex encoding: the bit pattern is identical.
+   */
+  private static long readUInt64(ClickHouseBinaryFormatReader reader, String col) {
+    Object v = reader.readValue(col);
+    if (v instanceof Long) return (Long) v;
+    if (v instanceof BigInteger) return ((BigInteger) v).longValue();
+    return 0L;
+  }
+
   static String getStatisticsJoinFragment(String database, String serviceName) {
     StringBuilder sb = new StringBuilder();
     sb.append(" LEFT JOIN (SELECT span_name, span_kind, service_name, ")
@@ -67,16 +80,16 @@ public final class ClickHouseResultMapper {
                                        boolean includeSpanStatistics) {
     Span.Builder builder = Span.newBuilder();
 
-    // UInt64 → getLong() returns the raw 64 bits as long (no BigInteger).
-    long traceIdLow  = reader.getLong("trace_id");
-    long traceIdHigh = reader.getLong("trace_id_high");
+    // UInt64 — readUInt64() extracts raw 64 bits without ArithmeticException.
+    long traceIdLow  = readUInt64(reader, "trace_id");
+    long traceIdHigh = readUInt64(reader, "trace_id_high");
     builder.traceId(traceIdHigh == 0L ? toHex16(traceIdLow)
                                       : toHex16(traceIdHigh) + toHex16(traceIdLow));
 
-    builder.id(Long.toHexString(reader.getLong("span_id")));
+    builder.id(Long.toHexString(readUInt64(reader, "span_id")));
 
     if (reader.hasValue("parent_id")) {
-      long parentId = reader.getLong("parent_id");
+      long parentId = readUInt64(reader, "parent_id");
       if (parentId != 0L) builder.parentId(Long.toHexString(parentId));
     }
 
@@ -132,7 +145,7 @@ public final class ClickHouseResultMapper {
       if (tsMicros > 0) builder.timestamp(tsMicros);
     }
 
-    long duration = reader.getLong("duration");
+    long duration = readUInt64(reader, "duration");
     if (duration > 0) builder.duration(duration);
 
     if (includeSpanStatistics) {
@@ -141,9 +154,9 @@ public final class ClickHouseResultMapper {
       BigDecimal p50             = reader.hasValue("p50")              ? reader.getBigDecimal("p50")              : null;
       BigDecimal p95             = reader.hasValue("p95")              ? reader.getBigDecimal("p95")              : null;
       BigDecimal p99             = reader.hasValue("p99")              ? reader.getBigDecimal("p99")              : null;
-      Long successCount = reader.hasValue("success_count") ? reader.getLong("success_count") : null;
-      Long errorCount   = reader.hasValue("error_count")   ? reader.getLong("error_count")   : null;
-      Long totalCount   = reader.hasValue("total_count")   ? reader.getLong("total_count")   : null;
+      Long successCount = reader.hasValue("success_count") ? readUInt64(reader, "success_count") : null;
+      Long errorCount   = reader.hasValue("error_count")   ? readUInt64(reader, "error_count")   : null;
+      Long totalCount   = reader.hasValue("total_count")   ? readUInt64(reader, "total_count")   : null;
 
       if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
           p99 != null || successCount != null || errorCount != null || totalCount != null) {
