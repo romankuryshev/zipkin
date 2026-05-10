@@ -16,11 +16,22 @@ import java.net.Inet6Address;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public final class ClickHouseResultMapper {
 
   private ClickHouseResultMapper() {}
+
+  // Lookup table for hex encoding — no String.format, no varargs, no boxing.
+  private static final char[] HEX = "0123456789abcdef".toCharArray();
+
+  private static String toHex16(long v) {
+    char[] buf = new char[16];
+    for (int i = 15; i >= 0; i--) {
+      buf[i] = HEX[(int) (v & 0xF)];
+      v >>>= 4;
+    }
+    return new String(buf);
+  }
 
   static String getStatisticsJoinFragment(String database, String serviceName) {
     StringBuilder sb = new StringBuilder();
@@ -43,6 +54,135 @@ public final class ClickHouseResultMapper {
     return sb.toString();
   }
 
+  // ── hot path ────────────────────────────────────────────────────────────────
+
+  /**
+   * Reads the current row from the typed reader.
+   * Called after reader.next() has advanced the cursor.
+   * Uses typed getters (getLong, getString, getInstant, …) instead of the
+   * Map<String,Object> returned by next() — eliminates HashMap lookup overhead
+   * and avoids BigInteger creation for UInt64 columns where possible.
+   */
+  private static Span toSpanFromReader(ClickHouseBinaryFormatReader reader,
+                                       boolean includeSpanStatistics) {
+    Span.Builder builder = Span.newBuilder();
+
+    // UInt64 → getLong() returns the raw 64 bits as long (no BigInteger).
+    long traceIdLow  = reader.getLong("trace_id");
+    long traceIdHigh = reader.getLong("trace_id_high");
+    builder.traceId(traceIdHigh == 0L ? toHex16(traceIdLow)
+                                      : toHex16(traceIdHigh) + toHex16(traceIdLow));
+
+    builder.id(Long.toHexString(reader.getLong("span_id")));
+
+    if (reader.hasValue("parent_id")) {
+      long parentId = reader.getLong("parent_id");
+      if (parentId != 0L) builder.parentId(Long.toHexString(parentId));
+    }
+
+    String spanName = reader.getString("name");
+    builder.name(spanName);
+
+    // Local endpoint
+    String localSvc = reader.getString("local_endpoint_service_name");
+    Inet4Address localIpv4 = reader.hasValue("local_endpoint_ipv4")
+        ? reader.getInet4Address("local_endpoint_ipv4") : null;
+    Inet6Address localIpv6 = reader.hasValue("local_endpoint_ipv6")
+        ? reader.getInet6Address("local_endpoint_ipv6") : null;
+    Integer localPort = reader.hasValue("local_endpoint_port")
+        ? reader.getInteger("local_endpoint_port") : null;
+    if (localSvc != null || localIpv4 != null || localIpv6 != null || localPort != null) {
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (localSvc != null && !localSvc.isEmpty()) ep.serviceName(localSvc);
+      if (localIpv4 != null) ep.parseIp(localIpv4);
+      if (localIpv6 != null) ep.parseIp(localIpv6);
+      if (localPort != null) ep.port(localPort);
+      builder.localEndpoint(ep.build());
+    }
+
+    // Remote endpoint
+    String remoteSvc = reader.getString("remote_endpoint_service_name");
+    Inet4Address remoteIpv4 = reader.hasValue("remote_endpoint_ipv4")
+        ? reader.getInet4Address("remote_endpoint_ipv4") : null;
+    Inet6Address remoteIpv6 = reader.hasValue("remote_endpoint_ipv6")
+        ? reader.getInet6Address("remote_endpoint_ipv6") : null;
+    Integer remotePort = reader.hasValue("remote_endpoint_port")
+        ? reader.getInteger("remote_endpoint_port") : null;
+    if (remoteSvc != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (remoteSvc != null && !remoteSvc.isEmpty()) ep.serviceName(remoteSvc);
+      if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
+      if (remoteIpv6 != null) ep.parseIp(remoteIpv6);
+      if (remotePort != null) ep.port(remotePort);
+      builder.remoteEndpoint(ep.build());
+    }
+
+    String spanKind = reader.getString("kind");
+    if (spanKind != null && !spanKind.isEmpty()) {
+      try {
+        builder.kind(Span.Kind.valueOf(spanKind));
+      } catch (IllegalArgumentException ignored) {
+      }
+    }
+
+    // Instant is cheaper than ZonedDateTime: no timezone object created.
+    Instant ts = reader.getInstant("timestamp");
+    if (ts != null) {
+      long tsMicros = ts.getEpochSecond() * 1_000_000L + ts.getNano() / 1_000L;
+      if (tsMicros > 0) builder.timestamp(tsMicros);
+    }
+
+    long duration = reader.getLong("duration");
+    if (duration > 0) builder.duration(duration);
+
+    if (includeSpanStatistics) {
+      BigDecimal medianDuration  = reader.hasValue("median_duration")  ? reader.getBigDecimal("median_duration")  : null;
+      BigDecimal averageDuration = reader.hasValue("average_duration") ? reader.getBigDecimal("average_duration") : null;
+      BigDecimal p50             = reader.hasValue("p50")              ? reader.getBigDecimal("p50")              : null;
+      BigDecimal p95             = reader.hasValue("p95")              ? reader.getBigDecimal("p95")              : null;
+      BigDecimal p99             = reader.hasValue("p99")              ? reader.getBigDecimal("p99")              : null;
+      Long successCount = reader.hasValue("success_count") ? reader.getLong("success_count") : null;
+      Long errorCount   = reader.hasValue("error_count")   ? reader.getLong("error_count")   : null;
+      Long totalCount   = reader.hasValue("total_count")   ? reader.getLong("total_count")   : null;
+
+      if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
+          p99 != null || successCount != null || errorCount != null || totalCount != null) {
+        builder.statistics(new SpanStatistics(
+          spanName,
+          spanKind != null ? spanKind : "",
+          medianDuration  != null ? medianDuration  : BigDecimal.ZERO,
+          averageDuration != null ? averageDuration : BigDecimal.ZERO,
+          p50 != null ? p50 : BigDecimal.ZERO,
+          p95 != null ? p95 : BigDecimal.ZERO,
+          p99 != null ? p99 : BigDecimal.ZERO,
+          successCount != null ? successCount : 0L,
+          errorCount   != null ? errorCount   : 0L,
+          totalCount   != null ? totalCount   : 0L
+        ));
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, String> tags = reader.readValue("tags");
+    if (tags != null) {
+      for (Map.Entry<String, String> tag : tags.entrySet()) {
+        builder.putTag(tag.getKey(), tag.getValue());
+      }
+    }
+
+    List<Object> annList = reader.getList("annotations");
+    if (annList != null && !annList.isEmpty()) {
+      readAnnotations(builder, annList);
+    }
+
+    if (reader.getByte("shared") == 1) builder.shared(true);
+    if (reader.getByte("debug") == 1) builder.debug(true);
+
+    return builder.build();
+  }
+
+  // ── public API ──────────────────────────────────────────────────────────────
+
   static Span toSpan(Map<String, Object> record) {
     return toSpan(record, true);
   }
@@ -55,8 +195,7 @@ public final class ClickHouseResultMapper {
 
     BigInteger traceIdLow = getBigInteger(record.get("trace_id"));
     BigInteger traceIdHigh = getBigInteger(record.get("trace_id_high"));
-    String traceId = combineTraceId(traceIdLow, traceIdHigh);
-    builder.traceId(traceId);
+    builder.traceId(combineTraceId(traceIdLow, traceIdHigh));
 
     BigInteger spanIdBig = getBigInteger(record.get("span_id"));
     builder.id(spanIdBig != null ? Long.toHexString(spanIdBig.longValue()) : "0");
@@ -69,47 +208,29 @@ public final class ClickHouseResultMapper {
     builder.name((String) record.get("name"));
 
     String localServiceName = (String) record.get("local_endpoint_service_name");
-    Inet4Address localIpv4 = (Inet4Address) record.get("local_endpoint_ipv4");
-    Inet6Address localIpv6 = (Inet6Address) record.get("local_endpoint_ipv6");
-    Integer localPort = getInteger(record.get("local_endpoint_port"));
-
+    Inet4Address localIpv4  = (Inet4Address) record.get("local_endpoint_ipv4");
+    Inet6Address localIpv6  = (Inet6Address) record.get("local_endpoint_ipv6");
+    Integer localPort       = getInteger(record.get("local_endpoint_port"));
     if (localServiceName != null || localIpv4 != null || localIpv6 != null || localPort != null) {
-      Endpoint.Builder localEndpointBuilder = Endpoint.newBuilder();
-      if (localServiceName != null && !localServiceName.isEmpty()) {
-        localEndpointBuilder.serviceName(localServiceName);
-      }
-      if (localIpv4 != null) {
-        localEndpointBuilder.parseIp(localIpv4);
-      }
-      if (localIpv6 != null) {
-        localEndpointBuilder.parseIp(localIpv6);
-      }
-      if (localPort != null) {
-        localEndpointBuilder.port(localPort);
-      }
-      builder.localEndpoint(localEndpointBuilder.build());
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (localServiceName != null && !localServiceName.isEmpty()) ep.serviceName(localServiceName);
+      if (localIpv4 != null) ep.parseIp(localIpv4);
+      if (localIpv6 != null) ep.parseIp(localIpv6);
+      if (localPort != null) ep.port(localPort);
+      builder.localEndpoint(ep.build());
     }
 
     String remoteServiceName = (String) record.get("remote_endpoint_service_name");
-    Inet4Address remoteIpv4 = (Inet4Address) record.get("remote_endpoint_ipv4");
-    Inet6Address remoteIpv6 = (Inet6Address) record.get("remote_endpoint_ipv6");
-    Integer remotePort = getInteger(record.get("remote_endpoint_port"));
-
+    Inet4Address remoteIpv4  = (Inet4Address) record.get("remote_endpoint_ipv4");
+    Inet6Address remoteIpv6  = (Inet6Address) record.get("remote_endpoint_ipv6");
+    Integer remotePort       = getInteger(record.get("remote_endpoint_port"));
     if (remoteServiceName != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
-      Endpoint.Builder remoteEndpointBuilder = Endpoint.newBuilder();
-      if (remoteServiceName != null && !remoteServiceName.isEmpty()) {
-        remoteEndpointBuilder.serviceName(remoteServiceName);
-      }
-      if (remoteIpv4 != null) {
-        remoteEndpointBuilder.parseIp(remoteIpv4);
-      }
-      if (remoteIpv6 != null) {
-        remoteEndpointBuilder.parseIp(remoteIpv6);
-      }
-      if (remotePort != null) {
-        remoteEndpointBuilder.port(remotePort);
-      }
-      builder.remoteEndpoint(remoteEndpointBuilder.build());
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (remoteServiceName != null && !remoteServiceName.isEmpty()) ep.serviceName(remoteServiceName);
+      if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
+      if (remoteIpv6 != null) ep.parseIp(remoteIpv6);
+      if (remotePort != null) ep.port(remotePort);
+      builder.remoteEndpoint(ep.build());
     }
 
     String spanKind = (String) record.get("kind");
@@ -121,41 +242,36 @@ public final class ClickHouseResultMapper {
     }
 
     Long timestamp = getLong(record.get("timestamp"));
-    if (timestamp != null && timestamp > 0) {
-      builder.timestamp(timestamp);
-    }
+    if (timestamp != null && timestamp > 0) builder.timestamp(timestamp);
 
     Long duration = getLong(record.get("duration"));
-    if (duration != null && duration > 0) {
-      builder.duration(duration);
-    }
+    if (duration != null && duration > 0) builder.duration(duration);
 
     if (includeSpanStatistics) {
-      BigDecimal medianDuration = getBigDecimal(record.get("median_duration"));
+      BigDecimal medianDuration  = getBigDecimal(record.get("median_duration"));
       BigDecimal averageDuration = getBigDecimal(record.get("average_duration"));
       BigDecimal p50 = getBigDecimal(record.get("p50"));
       BigDecimal p95 = getBigDecimal(record.get("p95"));
       BigDecimal p99 = getBigDecimal(record.get("p99"));
       Long successCount = getLong(record.get("success_count"));
-      Long errorCount = getLong(record.get("error_count"));
-      Long totalCount = getLong(record.get("total_count"));
+      Long errorCount   = getLong(record.get("error_count"));
+      Long totalCount   = getLong(record.get("total_count"));
 
       if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
           p99 != null || successCount != null || errorCount != null || totalCount != null) {
         String spanName = (String) record.get("name");
-        SpanStatistics stats = new SpanStatistics(
+        builder.statistics(new SpanStatistics(
           spanName,
           spanKind != null ? spanKind : "",
-          medianDuration != null ? medianDuration : BigDecimal.ZERO,
+          medianDuration  != null ? medianDuration  : BigDecimal.ZERO,
           averageDuration != null ? averageDuration : BigDecimal.ZERO,
           p50 != null ? p50 : BigDecimal.ZERO,
           p95 != null ? p95 : BigDecimal.ZERO,
           p99 != null ? p99 : BigDecimal.ZERO,
           successCount != null ? successCount : 0L,
-          errorCount != null ? errorCount : 0L,
-          totalCount != null ? totalCount : 0L
-        );
-        builder.statistics(stats);
+          errorCount   != null ? errorCount   : 0L,
+          totalCount   != null ? totalCount   : 0L
+        ));
       }
     }
 
@@ -167,52 +283,16 @@ public final class ClickHouseResultMapper {
       }
     }
 
-    List<Object> annotationsList = ((BinaryStreamReader.ArrayValue) record.get("annotations")).asList();
-    if (annotationsList != null && !annotationsList.isEmpty()) {
-      for (Object annObj : annotationsList) {
-        if (annObj instanceof Map) {
-          @SuppressWarnings("unchecked")
-          Map<String, Object> annMap = (Map<String, Object>) annObj;
-          Long annTimestamp = getLong(annMap.get("timestamp"));
-          String annValue = (String) annMap.get("value");
-          if (annTimestamp != null && annValue != null) {
-            builder.addAnnotation(annTimestamp, annValue);
-          }
-        } else if (annObj instanceof List) {
-          @SuppressWarnings("unchecked")
-          List<Object> annList = (List<Object>) annObj;
-          if (annList.size() >= 2) {
-            Long annTimestamp = getLong(annList.get(0));
-            Object val = annList.get(1);
-            String annValue = val instanceof String ? (String) val : null;
-            if (annTimestamp != null && annValue != null) {
-              builder.addAnnotation(annTimestamp, annValue);
-            }
-          }
-        } else if (annObj instanceof Object[]) {
-          Object[] annArr = (Object[]) annObj;
-          if (annArr.length >= 2) {
-            Long annTimestamp = getLong(annArr[0]);
-            String annValue = annArr[1] instanceof String ? (String) annArr[1] : null;
-            if (annTimestamp != null && annValue != null) {
-              builder.addAnnotation(annTimestamp, annValue);
-            }
-          }
-        }
-      }
+    Object annRaw = record.get("annotations");
+    if (annRaw instanceof BinaryStreamReader.ArrayValue) {
+      List<Object> annList = ((BinaryStreamReader.ArrayValue) annRaw).asList();
+      if (annList != null && !annList.isEmpty()) readAnnotations(builder, annList);
     }
 
     Object sharedVal = record.get("shared");
-    if (sharedVal != null) {
-      int s = sharedVal instanceof Number ? ((Number) sharedVal).intValue() : 0;
-      if (s == 1) builder.shared(true);
-    }
-
+    if (sharedVal instanceof Number && ((Number) sharedVal).intValue() == 1) builder.shared(true);
     Object debugVal = record.get("debug");
-    if (debugVal != null) {
-      int d = debugVal instanceof Number ? ((Number) debugVal).intValue() : 0;
-      if (d == 1) builder.debug(true);
-    }
+    if (debugVal instanceof Number && ((Number) debugVal).intValue() == 1) builder.debug(true);
 
     return builder.build();
   }
@@ -223,29 +303,24 @@ public final class ClickHouseResultMapper {
 
   static List<Span> toSpans(QueryResponse response, Client client, boolean includeSpanStatistics) {
     List<Span> spans = new ArrayList<>();
-
     try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {
       while (reader.hasNext()) {
-        Map<String, Object> record = reader.next();
-        spans.add(toSpan(record, includeSpanStatistics));
+        reader.next(); // advance cursor; discard Map wrapper — use typed getters below
+        spans.add(toSpanFromReader(reader, includeSpanStatistics));
       }
     } catch (Exception e) {
       throw new RuntimeException("Failed to read spans from ClickHouse", e);
     }
-
     return spans;
   }
 
   static List<String> toStringList(QueryResponse response, Client client, String columnName) {
     List<String> result = new ArrayList<>();
-
     try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {
       while (reader.hasNext()) {
-        Map<String, Object> record = reader.next();
-        String value = (String) record.get(columnName);
-        if (value != null && !value.isEmpty()) {
-          result.add(value);
-        }
+        reader.next();
+        String value = reader.getString(columnName);
+        if (value != null && !value.isEmpty()) result.add(value);
       }
     } catch (Exception e) {
       throw new RuntimeException("Failed to read strings from ClickHouse", e);
@@ -254,47 +329,64 @@ public final class ClickHouseResultMapper {
   }
 
   static List<List<Span>> groupSpansByTraceId(List<Span> spans) {
-    Map<String, List<Span>> grouped = spans.stream()
-      .collect(Collectors.groupingBy(Span::traceId));
+    Map<String, List<Span>> grouped = new LinkedHashMap<>();
+    for (Span span : spans) {
+      grouped.computeIfAbsent(span.traceId(), k -> new ArrayList<>()).add(span);
+    }
     return new ArrayList<>(grouped.values());
   }
 
   static List<DependencyLink> toDependencyLinks(QueryResponse response, Client client) {
     List<DependencyLink> links = new ArrayList<>();
-
     try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {
       while (reader.hasNext()) {
-        Map<String, Object> record = reader.next();
-        String child = (String) record.get("local_service_name");
-        String parent = (String) record.get("remote_service_name");
+        reader.next();
+        String child  = reader.getString("local_service_name");
+        String parent = reader.getString("remote_service_name");
         if (parent != null && !parent.isEmpty() && child != null && !child.isEmpty()) {
-          links.add(DependencyLink.newBuilder()
-            .parent(parent)
-            .child(child)
-            .callCount(1)
-            .build());
+          links.add(DependencyLink.newBuilder().parent(parent).child(child).callCount(1).build());
         }
       }
     } catch (Exception e) {
       throw new RuntimeException("Failed to read dependencies from ClickHouse", e);
     }
-
     return links;
   }
 
-  private static String combineTraceId(BigInteger traceIdLow, BigInteger traceIdHigh) {
-    if (traceIdLow == null) traceIdLow = BigInteger.ZERO;
-    if (traceIdHigh == null) traceIdHigh = BigInteger.ZERO;
+  // ── helpers ─────────────────────────────────────────────────────────────────
 
-    // longValue() extracts the raw 64 bits — correct for UInt64 hex representation.
-    // String.format("%016x") is a pure bit-shift operation, ~10x faster than BigInteger.toString(16).
-    String lowHex = String.format("%016x", traceIdLow.longValue());
-
-    if (traceIdHigh.signum() == 0) {
-      return lowHex;
+  private static void readAnnotations(Span.Builder builder, List<Object> annList) {
+    for (Object annObj : annList) {
+      if (annObj instanceof Map) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> annMap = (Map<String, Object>) annObj;
+        Long annTs = getLong(annMap.get("timestamp"));
+        String annVal = (String) annMap.get("value");
+        if (annTs != null && annVal != null) builder.addAnnotation(annTs, annVal);
+      } else if (annObj instanceof List) {
+        @SuppressWarnings("unchecked")
+        List<Object> annL = (List<Object>) annObj;
+        if (annL.size() >= 2) {
+          Long annTs = getLong(annL.get(0));
+          Object v = annL.get(1);
+          if (annTs != null && v instanceof String) builder.addAnnotation(annTs, (String) v);
+        }
+      } else if (annObj instanceof Object[]) {
+        Object[] annArr = (Object[]) annObj;
+        if (annArr.length >= 2) {
+          Long annTs = getLong(annArr[0]);
+          if (annTs != null && annArr[1] instanceof String) builder.addAnnotation(annTs, (String) annArr[1]);
+        }
+      }
     }
+  }
 
-    return String.format("%016x", traceIdHigh.longValue()) + lowHex;
+  private static String combineTraceId(BigInteger low, BigInteger high) {
+    if (low == null) low = BigInteger.ZERO;
+    if (high == null) high = BigInteger.ZERO;
+    return high.signum() == 0
+        ? toHex16(low.longValue())
+        : toHex16(high.longValue()) + toHex16(low.longValue());
   }
 
   private static Long getLong(Object value) {
@@ -302,16 +394,16 @@ public final class ClickHouseResultMapper {
     if (value instanceof Long) return (Long) value;
     if (value instanceof Integer) return ((Integer) value).longValue();
     if (value instanceof BigInteger) return ((BigInteger) value).longValue();
+    if (value instanceof Instant) {
+      Instant i = (Instant) value;
+      return i.getEpochSecond() * 1_000_000L + i.getNano() / 1_000L;
+    }
     if (value instanceof ZonedDateTime) {
-      Instant instant = ((ZonedDateTime) value).toInstant();
-      return instant.getEpochSecond() * 1_000_000L + instant.getNano() / 1_000L;
+      Instant i = ((ZonedDateTime) value).toInstant();
+      return i.getEpochSecond() * 1_000_000L + i.getNano() / 1_000L;
     }
     if (value instanceof String) {
-      try {
-        return Long.parseLong((String) value);
-      } catch (NumberFormatException e) {
-        return null;
-      }
+      try { return Long.parseLong((String) value); } catch (NumberFormatException e) { return null; }
     }
     return null;
   }
@@ -322,11 +414,7 @@ public final class ClickHouseResultMapper {
     if (value instanceof Long) return BigInteger.valueOf((Long) value);
     if (value instanceof Integer) return BigInteger.valueOf((Integer) value);
     if (value instanceof String) {
-      try {
-        return new BigInteger((String) value);
-      } catch (NumberFormatException e) {
-        return null;
-      }
+      try { return new BigInteger((String) value); } catch (NumberFormatException e) { return null; }
     }
     return null;
   }
@@ -340,11 +428,7 @@ public final class ClickHouseResultMapper {
     if (value instanceof Integer) return BigDecimal.valueOf((Integer) value);
     if (value instanceof BigInteger) return new BigDecimal((BigInteger) value);
     if (value instanceof String) {
-      try {
-        return new BigDecimal((String) value);
-      } catch (NumberFormatException e) {
-        return null;
-      }
+      try { return new BigDecimal((String) value); } catch (NumberFormatException e) { return null; }
     }
     return null;
   }
@@ -354,13 +438,8 @@ public final class ClickHouseResultMapper {
     if (value instanceof Integer) return (Integer) value;
     if (value instanceof Long) return ((Long) value).intValue();
     if (value instanceof String) {
-      try {
-        return Integer.parseInt((String) value);
-      } catch (NumberFormatException e) {
-        return null;
-      }
+      try { return Integer.parseInt((String) value); } catch (NumberFormatException e) { return null; }
     }
     return null;
   }
 }
-
