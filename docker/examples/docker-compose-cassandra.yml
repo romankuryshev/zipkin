@@ -19,9 +19,8 @@ services:
     # environment:
     #  - DS_LICENSE=accept
     container_name: cassandra
-    # Uncomment to expose the storage port for testing
-    # ports:
-    #   - 9042:9042
+    ports:
+      - 9042:9042
 
   # Use Cassandra instead of in-memory storage
   zipkin:

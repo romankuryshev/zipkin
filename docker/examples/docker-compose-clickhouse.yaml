@@ -14,7 +14,7 @@
 version: '3.8'
 
 services:
-  clickho use:
+  clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: zipkin-clickhouse
     ports:
@@ -31,6 +31,12 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user=zipkin", "--password=zipkin", "--query=SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   clickhouse_data:
