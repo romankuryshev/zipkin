@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS spans
   debug                        UInt8 DEFAULT 0
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
-    ORDER BY (name, local_endpoint_service_name, kind)
+    ORDER BY (local_endpoint_service_name, name, timestamp, trace_id)
     SETTINGS index_granularity = 8192;
 
 ALTER TABLE spans
@@ -50,6 +50,9 @@ ALTER TABLE spans
     SELECT *
     ORDER BY (trace_id)
     );
+
+ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
+ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
 
 CREATE TABLE IF NOT EXISTS spans_aggregate_stats
 (

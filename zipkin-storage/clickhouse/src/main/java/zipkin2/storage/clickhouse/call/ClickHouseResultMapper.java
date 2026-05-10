@@ -22,20 +22,25 @@ public final class ClickHouseResultMapper {
 
   private ClickHouseResultMapper() {}
 
-  static String getStatisticsJoinFragment(String database) {
-    return " LEFT JOIN (SELECT span_name, span_kind, service_name, " +
-      "medianMerge(median_duration) AS median_duration, " +
-      "avgMerge(average_duration) AS average_duration, " +
-      "quantileMerge(p50) AS p50, " +
-      "quantileMerge(p95) AS p95, " +
-      "quantileMerge(p99) AS p99, " +
-      "sumMerge(success_count) AS success_count, " +
-      "sumMerge(error_count) AS error_count, " +
-      "sumMerge(total_count) AS total_count " +
-      "FROM " + database + ".spans_aggregate_stats " +
-      "GROUP BY span_name, span_kind, service_name) AS stats " +
-      "ON s.name = stats.span_name AND s.kind = stats.span_kind " +
-      "AND s.local_endpoint_service_name = stats.service_name";
+  static String getStatisticsJoinFragment(String database, String serviceName) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(" LEFT JOIN (SELECT span_name, span_kind, service_name, ")
+      .append("medianMerge(median_duration) AS median_duration, ")
+      .append("avgMerge(average_duration) AS average_duration, ")
+      .append("quantileMerge(p50) AS p50, ")
+      .append("quantileMerge(p95) AS p95, ")
+      .append("quantileMerge(p99) AS p99, ")
+      .append("sumMerge(success_count) AS success_count, ")
+      .append("sumMerge(error_count) AS error_count, ")
+      .append("sumMerge(total_count) AS total_count ")
+      .append("FROM ").append(database).append(".spans_aggregate_stats");
+    if (serviceName != null) {
+      sb.append(" WHERE service_name = {statsServiceName:String}");
+    }
+    sb.append(" GROUP BY span_name, span_kind, service_name) AS stats ")
+      .append("ON s.name = stats.span_name AND s.kind = stats.span_kind ")
+      .append("AND s.local_endpoint_service_name = stats.service_name");
+    return sb.toString();
   }
 
   static Span toSpan(Map<String, Object> record) {

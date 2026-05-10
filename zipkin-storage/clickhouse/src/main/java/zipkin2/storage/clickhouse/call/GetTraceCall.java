@@ -40,7 +40,7 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
     sql.append(" FROM ").append(database).append(".spans s");
 
     if (includeSpanStatistics) {
-      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));
+      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database, null));
     }
 
     sql.append(" WHERE s.trace_id = {traceIdLow:UInt64}")

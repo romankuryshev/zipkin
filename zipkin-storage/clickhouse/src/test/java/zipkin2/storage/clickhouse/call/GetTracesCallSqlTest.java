@@ -106,6 +106,40 @@ class GetTracesCallSqlTest {
   }
 
   @Test
+  void outerQuery_hasLimitBasedOnRequestAndMultiplier() {
+    String sql = capturedSql(new GetTracesCall(client, "zipkin", defaultRequest, 3, false));
+    // limit=10, multiplier=3 → LIMIT 30
+    assertTrue(sql.contains("LIMIT 30"), "Outer query must have LIMIT to prevent unbounded scans");
+  }
+
+  @Test
+  void innerQuery_usesFromUnixTimestampForPartitionPruning() {
+    String sql = capturedSql(new GetTracesCall(client, "zipkin", defaultRequest, 3, false));
+    assertTrue(sql.contains("timestamp >= fromUnixTimestamp64Micro("), "Must use fromUnixTimestamp64Micro for partition pruning");
+    assertTrue(sql.contains("timestamp <= fromUnixTimestamp64Micro("));
+    assertFalse(sql.contains("toUnixTimestamp64Micro(timestamp)"), "Must not apply function to the column");
+  }
+
+  @Test
+  void withStatistics_withServiceName_statsJoinFiltersServiceName() {
+    QueryRequest request = QueryRequest.newBuilder()
+      .endTs(System.currentTimeMillis())
+      .lookback(60_000)
+      .limit(10)
+      .serviceName("my-service")
+      .build();
+    String sql = capturedSql(new GetTracesCall(client, "zipkin", request, 3, true));
+    assertTrue(sql.contains("service_name = {statsServiceName:String}"),
+      "Stats subquery must filter by service_name to avoid full table aggregation");
+  }
+
+  @Test
+  void withStatistics_withoutServiceName_statsJoinHasNoWhereClause() {
+    String sql = capturedSql(new GetTracesCall(client, "zipkin", defaultRequest, 3, true));
+    assertFalse(sql.contains("statsServiceName"), "Stats subquery must not add WHERE when no service filter");
+  }
+
+  @Test
   void withoutStatistics_doesNotSelectStatsColumns() {
     String sql = capturedSql(new GetTracesCall(client, "zipkin", defaultRequest, 3, false));
     assertFalse(sql.contains("stats.median_duration"));

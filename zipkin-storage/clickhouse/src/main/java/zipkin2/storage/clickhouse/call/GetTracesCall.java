@@ -33,8 +33,8 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
 
     StringBuilder inner = new StringBuilder();
     inner.append("SELECT trace_id, trace_id_high FROM ").append(database).append(".spans")
-      .append(" WHERE toUnixTimestamp64Micro(timestamp) >= {startTimeMicros:Int64}")
-      .append(" AND toUnixTimestamp64Micro(timestamp) <= {endTimeMicros:Int64}");
+      .append(" WHERE timestamp >= fromUnixTimestamp64Micro({startTimeMicros:Int64})")
+      .append(" AND timestamp <= fromUnixTimestamp64Micro({endTimeMicros:Int64})");
 
     if (request.serviceName() != null) {
       inner.append(" AND local_endpoint_service_name = {serviceName:String}");
@@ -99,11 +99,15 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     sql.append(" FROM ").append(database).append(".spans s");
 
     if (includeSpanStatistics) {
-      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));
+      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database, request.serviceName()));
+      if (request.serviceName() != null) {
+        queryParams.put("statsServiceName", request.serviceName().toLowerCase(java.util.Locale.ROOT));
+      }
     }
 
     sql.append(" WHERE (s.trace_id, s.trace_id_high) GLOBAL IN (").append(inner).append(")")
-      .append(" ORDER BY s.timestamp DESC");
+      .append(" ORDER BY s.timestamp DESC")
+      .append(" LIMIT ").append((long) request.limit() * maxSpansLimitMultiplier);
 
     try {
       QueryResponse response = client.query(sql.toString(), queryParams, newQuerySettings()).get();

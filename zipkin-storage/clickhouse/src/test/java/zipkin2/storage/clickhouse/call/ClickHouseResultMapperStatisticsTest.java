@@ -37,19 +37,19 @@ class ClickHouseResultMapperStatisticsTest {
 
   @Test
   void statisticsJoinFragment_containsDatabaseName() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("mydb");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("mydb", null);
     assertTrue(fragment.contains("mydb.spans_aggregate_stats"));
   }
 
   @Test
   void statisticsJoinFragment_startsWithLeftJoin() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin", null);
     assertTrue(fragment.startsWith(" LEFT JOIN"));
   }
 
   @Test
   void statisticsJoinFragment_containsAllDurationMergeFunctions() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin", null);
     assertTrue(fragment.contains("medianMerge(median_duration)"));
     assertTrue(fragment.contains("avgMerge(average_duration)"));
     assertTrue(fragment.contains("quantileMerge(p50)"));
@@ -59,7 +59,7 @@ class ClickHouseResultMapperStatisticsTest {
 
   @Test
   void statisticsJoinFragment_containsCountMergeFunctions() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin", null);
     assertTrue(fragment.contains("sumMerge(success_count)"));
     assertTrue(fragment.contains("sumMerge(error_count)"));
     assertTrue(fragment.contains("sumMerge(total_count)"));
@@ -67,13 +67,13 @@ class ClickHouseResultMapperStatisticsTest {
 
   @Test
   void statisticsJoinFragment_containsGroupByClause() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin", null);
     assertTrue(fragment.contains("GROUP BY span_name, span_kind, service_name"));
   }
 
   @Test
   void statisticsJoinFragment_containsThreeColumnJoinCondition() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin", null);
     assertTrue(fragment.contains("s.name = stats.span_name"));
     assertTrue(fragment.contains("s.kind = stats.span_kind"));
     assertTrue(fragment.contains("s.local_endpoint_service_name = stats.service_name"));
@@ -81,7 +81,7 @@ class ClickHouseResultMapperStatisticsTest {
 
   @Test
   void statisticsJoinFragment_aliasedAsStats() {
-    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin");
+    String fragment = ClickHouseResultMapper.getStatisticsJoinFragment("zipkin", null);
     assertTrue(fragment.contains("AS stats"));
   }
 

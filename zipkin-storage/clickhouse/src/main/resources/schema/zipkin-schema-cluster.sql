@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS spans_local ON CLUSTER '{cluster}'
   debug                        UInt8 DEFAULT 0
 ) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/spans', '{replica}')
     PARTITION BY toDate(timestamp)
-    ORDER BY (name, local_endpoint_service_name, kind)
+    ORDER BY (local_endpoint_service_name, name, timestamp, trace_id)
     SETTINGS index_granularity = 8192;
 
 ALTER TABLE spans_local ON CLUSTER '{cluster}'
@@ -50,6 +50,9 @@ ALTER TABLE spans_local ON CLUSTER '{cluster}'
     SELECT *
     ORDER BY (trace_id)
     );
+
+ALTER TABLE spans_local ON CLUSTER '{cluster}' ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
+ALTER TABLE spans_local ON CLUSTER '{cluster}' ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
 
 CREATE TABLE IF NOT EXISTS spans_aggregate_stats_local ON CLUSTER '{cluster}'
 (

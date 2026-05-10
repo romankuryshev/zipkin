@@ -52,7 +52,7 @@ public class GetTracesByIdCall extends ClickHouseCall<List<List<Span>>> {
     sql.append(" FROM ").append(database).append(".spans s");
 
     if (includeSpanStatistics) {
-      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));
+      sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database, null));
     }
 
     Map<String, Object> queryParams = new java.util.HashMap<>();
