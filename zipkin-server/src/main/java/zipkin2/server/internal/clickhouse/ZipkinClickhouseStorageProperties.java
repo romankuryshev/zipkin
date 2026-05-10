@@ -157,13 +157,12 @@ class ZipkinClickhouseStorageProperties {
   }
 
   public ClickHouseStorage.Builder toStorageBuilder() {
-    return new ClickHouseStorage.Builder()
+    ClickHouseStorage.Builder builder = new ClickHouseStorage.Builder()
       .setHost(host)
       .setPort(port)
       .setUsername(username)
       .setPassword(password)
       .setDatabase(database)
-      .setClusterNodes(clusterNodes)
       .setEnsureSchema(ensureSchema)
       .setStrictTraceId(strictTraceId)
       .setAutocompleteKeys(autocompleteKeys)
@@ -173,5 +172,9 @@ class ZipkinClickhouseStorageProperties {
       .setMaxSpansLimitMultiplier(maxSpansLimitMultiplier)
       .setBatchSize(batchSize)
       .setAutoFlushIntervalMs(autoFlushIntervalMs);
+    if (!clusterNodes.isEmpty()) {
+      builder.setClusterNodes(clusterNodes);
+    }
+    return builder;
   }
 }
