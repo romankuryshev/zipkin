@@ -1,9 +1,5 @@
 package zipkin2.storage.clickhouse.dto;
 
-/**
- * DTO for service_operation_names table in ClickHouse.
- * Maps to columns: service_name, operation_name
- */
 public class ServiceOperationNameRecord {
   private String serviceName;
   private String operationName;

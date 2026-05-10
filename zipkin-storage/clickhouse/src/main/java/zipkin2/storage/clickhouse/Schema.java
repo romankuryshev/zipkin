@@ -13,30 +13,36 @@ class Schema {
     "spans"
   );
 
-  public static void ensure(ClickHouseStorage clickHouseStorage) {
-    if (!clickHouseStorage.isEnsureScheme()) return;
+  public static void ensure(ClickHouseStorage storage) {
+    if (!storage.isEnsureScheme()) return;
 
     try {
-      if (allTablesExist(clickHouseStorage)) {
+      if (allTablesExist(storage)) {
         return;
       }
 
-      try (InputStream is = Schema.class.getResourceAsStream("/schema/zipkin-schema-1.sql")) {
+      boolean isCluster = storage.getClusterName() != null;
+      String schemaResource = isCluster
+        ? "/schema/zipkin-schema-cluster.sql"
+        : "/schema/zipkin-schema-1.sql";
 
+      try (InputStream is = Schema.class.getResourceAsStream(schemaResource)) {
         if (is == null) {
-          throw new IllegalStateException("zipkin-schema-1.sql not found");
+          throw new IllegalStateException(schemaResource + " not found");
         }
 
         String sqlContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+        if (isCluster) {
+          sqlContent = sqlContent.replace("{cluster}", storage.getClusterName());
+        }
 
         String[] statements = sqlContent.split(";");
 
         for (String statement : statements) {
           String trimmedStatement = statement.trim();
-
-          if (!trimmedStatement.isEmpty() && !trimmedStatement.startsWith("--")) {
-            clickHouseStorage.getClient().execute(trimmedStatement).get();
-          }
+          if (isOnlyComments(trimmedStatement)) continue;
+          storage.getClient().execute(trimmedStatement).get();
         }
       }
     } catch (Exception e) {
@@ -44,28 +50,33 @@ class Schema {
     }
   }
 
-  private static boolean allTablesExist(ClickHouseStorage clickHouseStorage) throws Exception {
-    for (String tableName : REQUIRED_TABLES) {
-      if (!tableExists(clickHouseStorage, tableName)) {
-        return false; // At least one table is missing
-      }
-    }
-    return true; // All tables exist
+  private static boolean isOnlyComments(String statement) {
+    return Arrays.stream(statement.split("\n"))
+      .map(String::trim)
+      .filter(line -> !line.isEmpty())
+      .allMatch(line -> line.startsWith("--"));
   }
 
-  private static boolean tableExists(ClickHouseStorage clickHouseStorage, String tableName) throws Exception {
+  private static boolean allTablesExist(ClickHouseStorage storage) throws Exception {
+    for (String tableName : REQUIRED_TABLES) {
+      if (!tableExists(storage, tableName)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean tableExists(ClickHouseStorage storage, String tableName) throws Exception {
     String query = String.format(
-      "SELECT 1 FROM system.tables WHERE database = 'zipkin' AND name = '%s' LIMIT 1",
-      tableName
+      "SELECT 1 FROM system.tables WHERE database = '%s' AND name = '%s' LIMIT 1",
+      storage.getDatabase(), tableName
     );
 
-    var response = clickHouseStorage.getClient().query(query).get();
-    var client = clickHouseStorage.getClient();
+    var response = storage.getClient().query(query).get();
+    var client = storage.getClient();
 
     try (var reader = client.newBinaryFormatReader(response)) {
       return reader.hasNext();
     }
   }
 }
-
-

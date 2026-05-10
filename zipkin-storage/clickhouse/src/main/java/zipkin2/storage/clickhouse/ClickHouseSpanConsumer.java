@@ -66,7 +66,6 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
 
 
     Call<Void> insertCall = Call.create(null);
-    // Check if we should flush immediately (batch size reached)
     if (buffer.size() >= batchSize) {
       insertCall = flushBuffer();
     }
@@ -100,8 +99,6 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
     }
   }
 
-  // Package-private: used by ClickHouseStorage.forceFlush() in integration tests to drain the
-  // buffer regardless of BATCH_SIZE, ensuring writes reach ClickHouse before assertions.
   void forceFlush() throws java.io.IOException {
     lock.lock();
     try {
@@ -116,10 +113,7 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
 
   public void close() {
     try {
-      // Flush remaining spans
       flushBufferAsync();
-
-      // Shutdown scheduler
       scheduler.shutdown();
       if (!scheduler.awaitTermination(30, TimeUnit.SECONDS)) {
         log.warn("Scheduler did not terminate within 30 seconds, forcing shutdown");

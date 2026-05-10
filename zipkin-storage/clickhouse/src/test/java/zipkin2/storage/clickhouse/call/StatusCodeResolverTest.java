@@ -173,7 +173,6 @@ class StatusCodeResolverTest {
 
   @Test
   void resolveStatusCode_producerSpanNoStatus() {
-    // Для PRODUCER/CONSUMER span'ов без явного статуса не присваиваем success
     Span span = Span.newBuilder()
       .traceId("4e441824ec2b6a44ffdc9bb9a6453df3")
       .id("ffdc9bb9a6453df3")

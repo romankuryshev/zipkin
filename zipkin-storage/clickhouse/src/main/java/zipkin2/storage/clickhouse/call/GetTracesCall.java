@@ -102,7 +102,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
       sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database));
     }
 
-    sql.append(" WHERE (s.trace_id, s.trace_id_high) IN (").append(inner).append(")")
+    sql.append(" WHERE (s.trace_id, s.trace_id_high) GLOBAL IN (").append(inner).append(")")
       .append(" ORDER BY s.timestamp DESC");
 
     try {

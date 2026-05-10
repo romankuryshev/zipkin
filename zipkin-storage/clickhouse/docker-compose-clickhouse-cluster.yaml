@@ -6,11 +6,15 @@ services:
     container_name: zipkin-clickhouse-1
     hostname: clickhouse-1
     ports:
-      - "8123:8123"   # HTTP interface
-      - "9000:9000"   # Native TCP
+      - "8123:8123"
+      - "9000:9000"
+      - "9181:9181"
     volumes:
       - clickhouse_data_1:/var/lib/clickhouse
-      - ./clickhouse:/docker-entrypoint-initdb.d
+      - ./clickhouse/init-zipkin.sql:/docker-entrypoint-initdb.d/init-zipkin.sql
+      - ./clickhouse/cluster/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
+      - ./clickhouse/cluster/macros-shard1.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./clickhouse/cluster/keeper.xml:/etc/clickhouse-server/config.d/keeper.xml
     environment:
       CLICKHOUSE_DB: zipkin
       CLICKHOUSE_USER: zipkin
@@ -27,15 +31,19 @@ services:
     container_name: zipkin-clickhouse-2
     hostname: clickhouse-2
     ports:
-      - "8124:8123"   # HTTP interface (mapped to different port)
-      - "9001:9000"   # Native TCP (mapped to different port)
+      - "8124:8123"
+      - "9001:9000"
     volumes:
       - clickhouse_data_2:/var/lib/clickhouse
-      - ./clickhouse:/docker-entrypoint-initdb.d
+      - ./clickhouse/init-zipkin.sql:/docker-entrypoint-initdb.d/init-zipkin.sql
+      - ./clickhouse/cluster/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
+      - ./clickhouse/cluster/macros-shard2.xml:/etc/clickhouse-server/config.d/macros.xml
     environment:
       CLICKHOUSE_DB: zipkin
       CLICKHOUSE_USER: zipkin
       CLICKHOUSE_PASSWORD: zipkin
+    depends_on:
+      - clickhouse-1
     ulimits:
       nofile:
         soft: 262144
@@ -48,15 +56,19 @@ services:
     container_name: zipkin-clickhouse-3
     hostname: clickhouse-3
     ports:
-      - "8125:8123"   # HTTP interface (mapped to different port)
-      - "9002:9000"   # Native TCP (mapped to different port)
+      - "8125:8123"
+      - "9002:9000"
     volumes:
       - clickhouse_data_3:/var/lib/clickhouse
-      - ./clickhouse:/docker-entrypoint-initdb.d
+      - ./clickhouse/init-zipkin.sql:/docker-entrypoint-initdb.d/init-zipkin.sql
+      - ./clickhouse/cluster/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
+      - ./clickhouse/cluster/macros-shard3.xml:/etc/clickhouse-server/config.d/macros.xml
     environment:
       CLICKHOUSE_DB: zipkin
       CLICKHOUSE_USER: zipkin
       CLICKHOUSE_PASSWORD: zipkin
+    depends_on:
+      - clickhouse-1
     ulimits:
       nofile:
         soft: 262144
@@ -72,4 +84,3 @@ volumes:
 networks:
   zipkin-network:
     driver: bridge
-

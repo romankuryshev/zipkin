@@ -2,10 +2,6 @@ package zipkin2.storage.clickhouse.dto;
 
 import java.time.Instant;
 
-/**
- * DTO for annotation tuple in ClickHouse.
- * Maps to Array(Tuple(timestamp DateTime64(6), value String))
- */
 public class AnnotationRecord {
   private Instant timestamp;
   private String value;

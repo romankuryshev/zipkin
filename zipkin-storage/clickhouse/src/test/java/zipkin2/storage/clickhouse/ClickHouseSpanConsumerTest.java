@@ -32,8 +32,6 @@ class ClickHouseSpanConsumerTest {
     if (consumer != null) consumer.close();
   }
 
-  // --- Buffer threshold behaviour ---
-
   @Test void acceptBelowBatchSizeReturnsNoOp() {
     consumer = new ClickHouseSpanConsumer(mockClient, true);
 
@@ -46,8 +44,6 @@ class ClickHouseSpanConsumerTest {
   @Test void acceptAtBatchSizeReturnsInsertCall() {
     consumer = new ClickHouseSpanConsumer(mockClient, true);
 
-    // Fill buffer to exactly BATCH_SIZE (10 000) first, then add one more span.
-    // The consumer checks the threshold BEFORE adding the incoming batch.
     Call<Void> fillResult = consumer.accept(spans(10_000));
     Call<Void> triggerResult = consumer.accept(spans(1));
 
@@ -60,8 +56,8 @@ class ClickHouseSpanConsumerTest {
   @Test void bufferIsResetAfterFlush() {
     consumer = new ClickHouseSpanConsumer(mockClient, true);
 
-    consumer.accept(spans(10_000)); // fill
-    consumer.accept(spans(1));      // triggers flush of the 10 000, adds 1 to fresh buffer
+    consumer.accept(spans(10_000));
+    consumer.accept(spans(1));
 
     Call<Void> afterFlush = consumer.accept(spans(5));
     assertEquals(Call.create(null), afterFlush,
@@ -83,8 +79,6 @@ class ClickHouseSpanConsumerTest {
 
     assertEquals(Call.create(null), result);
   }
-
-  // --- Concurrency ---
 
   @Test
   @Timeout(10)
@@ -155,8 +149,6 @@ class ClickHouseSpanConsumerTest {
     }
   }
 
-  // --- Lifecycle ---
-
   @Test
   @Timeout(35)
   void closeIsIdempotent() {
@@ -165,7 +157,7 @@ class ClickHouseSpanConsumerTest {
 
     assertDoesNotThrow(() -> {
       consumer.close();
-      consumer.close(); // second close must not throw
+      consumer.close();
     });
   }
 
@@ -181,8 +173,6 @@ class ClickHouseSpanConsumerTest {
 
     assertTrue(elapsed < 35_000, "close() must finish within 35 s, took " + elapsed + " ms");
   }
-
-  // --- Helpers ---
 
   private static List<Span> spans(int count) {
     List<Span> result = new ArrayList<>(count);

@@ -1,14 +1,15 @@
-# Example configuration for Zipkin with ClickHouse Cluster
-# This file shows how to configure Zipkin to use a ClickHouse cluster
 zipkin:
   storage:
     type: clickhouse
     clickhouse:
+      clusterName: zipkin_cluster
+      host: clickhouse-1
+      port: 8123
       database: zipkin
       username: zipkin
       password: zipkin
       ensureSchema: true
       clusterNodes:
-        - "localhost:8123"
-        - "localhost:8124"
-        - "localhost:8125"
+        - "http://clickhouse-1:8123/"
+        - "http://clickhouse-2:8123/"
+        - "http://clickhouse-3:8123/"

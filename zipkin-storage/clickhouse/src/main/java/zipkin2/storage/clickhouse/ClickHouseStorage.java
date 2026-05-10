@@ -27,6 +27,7 @@ public class ClickHouseStorage extends StorageComponent {
   private final Client client;
   private final boolean ensureScheme;
   private final String database;
+  private final String clusterName;
   private final boolean strictTraceId;
   private final Set<String> autocompleteKeys;
   private final int autocompleteTtl;
@@ -38,6 +39,7 @@ public class ClickHouseStorage extends StorageComponent {
   ClickHouseStorage(Builder b) {
     this.client = createClient(b);
     this.database = b.database;
+    this.clusterName = b.clusterName;
     this.strictTraceId = b.strictTraceId;
     this.autocompleteKeys = b.autocompleteKeys;
     this.autocompleteTtl = b.autocompleteTtl;
@@ -59,11 +61,10 @@ public class ClickHouseStorage extends StorageComponent {
     registerTables();
   }
 
-  // Package-private constructor for testing with a pre-built mock client.
-  // Skips registerTables() and ensureSchema.
   ClickHouseStorage(Builder b, Client client) {
     this.client = client;
     this.database = b.database;
+    this.clusterName = b.clusterName;
     this.strictTraceId = b.strictTraceId;
     this.autocompleteKeys = b.autocompleteKeys;
     this.autocompleteTtl = b.autocompleteTtl;
@@ -114,6 +115,10 @@ public class ClickHouseStorage extends StorageComponent {
     return client;
   }
 
+  public String getDatabase() {
+    return database;
+  }
+
   public boolean isStrictTraceId() {
     return strictTraceId;
   }
@@ -135,8 +140,6 @@ public class ClickHouseStorage extends StorageComponent {
     return autocompleteTagsCache;
   }
 
-  // Package-private: called from integration tests via blockWhileInFlight() to ensure
-  // buffered spans are flushed to ClickHouse before read assertions.
   void forceFlush() throws IOException {
     spanConsumer.forceFlush();
   }
@@ -153,6 +156,10 @@ public class ClickHouseStorage extends StorageComponent {
 
   public boolean isIncludeSpanStatistics() {
     return includeSpanStatistics;
+  }
+
+  public String getClusterName() {
+    return clusterName;
   }
 
   public Client createClient(Builder b) {
@@ -183,6 +190,7 @@ public class ClickHouseStorage extends StorageComponent {
     private String host;
     private int port;
     private List<String> clusterNodes = new ArrayList<>();
+    private String clusterName = null;
     private String database;
     private boolean ensureSchema;
     private String username;
@@ -200,15 +208,12 @@ public class ClickHouseStorage extends StorageComponent {
       return new ClickHouseStorage(this);
     }
 
-    // --- StorageComponent.Builder contract ---
-
     @Override public Builder strictTraceId(boolean strictTraceId) {
       this.strictTraceId = strictTraceId;
       return this;
     }
 
     @Override public Builder searchEnabled(boolean searchEnabled) {
-      // ClickHouse storage does not distinguish search-enabled vs disabled yet.
       return this;
     }
 
@@ -223,8 +228,6 @@ public class ClickHouseStorage extends StorageComponent {
     @Override public Builder autocompleteCardinality(int autocompleteCardinality) {
       return setAutocompleteCardinality(autocompleteCardinality);
     }
-
-    // --- ClickHouse-specific builder methods ---
 
     public Builder setHost(String host) {
       this.host = host;
@@ -317,6 +320,11 @@ public class ClickHouseStorage extends StorageComponent {
       if (nodes.isEmpty()) throw new IllegalArgumentException("nodes is empty");
       this.clusterNodes.clear();
       this.clusterNodes.addAll(nodes);
+      return this;
+    }
+
+    public Builder setClusterName(String clusterName) {
+      this.clusterName = clusterName;
       return this;
     }
   }

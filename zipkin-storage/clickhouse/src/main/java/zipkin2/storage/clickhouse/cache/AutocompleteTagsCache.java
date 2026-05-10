@@ -39,7 +39,6 @@ public final class AutocompleteTagsCache {
       return;
     }
 
-    // Only cache configured keys
     if (!configuredKeys.contains(tagKey)) {
       return;
     }
@@ -48,7 +47,6 @@ public final class AutocompleteTagsCache {
     try {
       CacheEntry entry = cache.computeIfAbsent(tagKey, k -> new CacheEntry());
 
-      // Add new values, respecting cardinality limit
       for (String value : values) {
         if (value != null && !value.isEmpty() && entry.values.size() < maxCardinality) {
           entry.values.add(value);

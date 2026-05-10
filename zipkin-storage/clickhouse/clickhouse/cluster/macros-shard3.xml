@@ -1,0 +1,7 @@
+<clickhouse>
+  <macros>
+    <cluster>zipkin_cluster</cluster>
+    <shard>03</shard>
+    <replica>clickhouse-3</replica>
+  </macros>
+</clickhouse>
