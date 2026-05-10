@@ -54,8 +54,15 @@ ALTER TABLE spans_local ON CLUSTER '{cluster}'
 ALTER TABLE spans_local ON CLUSTER '{cluster}'
   ADD PROJECTION IF NOT EXISTS spans_prj_service_ts
     (
-    SELECT *
-    ORDER BY (local_endpoint_service_name, timestamp DESC, trace_id, trace_id_high)
+    SELECT
+      local_endpoint_service_name,
+      remote_endpoint_service_name,
+      name,
+      duration,
+      timestamp,
+      trace_id,
+      trace_id_high
+    ORDER BY (local_endpoint_service_name, timestamp, trace_id, trace_id_high)
     );
 
 ALTER TABLE spans_local ON CLUSTER '{cluster}' ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;

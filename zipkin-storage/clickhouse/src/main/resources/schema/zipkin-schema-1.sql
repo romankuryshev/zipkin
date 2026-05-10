@@ -51,12 +51,21 @@ ALTER TABLE spans
     ORDER BY (trace_id)
     );
 
--- Enables early-stop LIMIT BY for "most recent traces per service" queries
+-- Thin index-projection for trace lookup (analog of Cassandra's trace_by_service_span):
+-- only 6 columns instead of 21 → dramatically less I/O for the inner query.
+-- Also covers spanName/remoteService/duration filters without falling back to the wide table.
 ALTER TABLE spans
   ADD PROJECTION IF NOT EXISTS spans_prj_service_ts
     (
-    SELECT *
-    ORDER BY (local_endpoint_service_name, timestamp DESC, trace_id, trace_id_high)
+    SELECT
+      local_endpoint_service_name,
+      remote_endpoint_service_name,
+      name,
+      duration,
+      timestamp,
+      trace_id,
+      trace_id_high
+    ORDER BY (local_endpoint_service_name, timestamp, trace_id, trace_id_high)
     );
 
 ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
