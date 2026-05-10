@@ -33,8 +33,14 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
       .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, s.shared, s.debug");
 
     if (includeSpanStatistics) {
-      sql.append(", stats.median_duration, stats.average_duration, stats.p50, stats.p95, stats.p99, ")
-        .append("stats.success_count, stats.error_count, stats.total_count ");
+      sql.append(", stats.median_duration AS median_duration")
+        .append(", stats.average_duration AS average_duration")
+        .append(", stats.p50 AS p50")
+        .append(", stats.p95 AS p95")
+        .append(", stats.p99 AS p99")
+        .append(", stats.success_count AS success_count")
+        .append(", stats.error_count AS error_count")
+        .append(", stats.total_count AS total_count ");
     }
 
     sql.append(" FROM ").append(database).append(".spans s");
@@ -53,7 +59,7 @@ public final class GetTraceCall extends ClickHouseCall<List<Span>> {
 
     try {
       QueryResponse response = client.query(sql.toString(), queryParams, newQuerySettings()).get();
-      return ClickHouseResultMapper.toSpans(response, client);
+      return ClickHouseResultMapper.toSpans(response, client, includeSpanStatistics);
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

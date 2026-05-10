@@ -44,6 +44,13 @@ public final class ClickHouseResultMapper {
   }
 
   static Span toSpan(Map<String, Object> record) {
+    return toSpan(record, true);
+  }
+
+  // Reads only stats columns when includeSpanStatistics=true.
+  // Reading absent columns triggers NoSuchColumnException inside RecordWrapper.get()
+  // which is caught and turned into null — but fillInStackTrace dominates CPU under load.
+  static Span toSpan(Map<String, Object> record, boolean includeSpanStatistics) {
     Span.Builder builder = Span.newBuilder();
 
     BigInteger traceIdLow = getBigInteger(record.get("trace_id"));
@@ -123,31 +130,33 @@ public final class ClickHouseResultMapper {
       builder.duration(duration);
     }
 
-    BigDecimal medianDuration = getBigDecimal(record.get("median_duration"));
-    BigDecimal averageDuration = getBigDecimal(record.get("average_duration"));
-    BigDecimal p50 = getBigDecimal(record.get("p50"));
-    BigDecimal p95 = getBigDecimal(record.get("p95"));
-    BigDecimal p99 = getBigDecimal(record.get("p99"));
-    Long successCount = getLong(record.get("success_count"));
-    Long errorCount = getLong(record.get("error_count"));
-    Long totalCount = getLong(record.get("total_count"));
+    if (includeSpanStatistics) {
+      BigDecimal medianDuration = getBigDecimal(record.get("median_duration"));
+      BigDecimal averageDuration = getBigDecimal(record.get("average_duration"));
+      BigDecimal p50 = getBigDecimal(record.get("p50"));
+      BigDecimal p95 = getBigDecimal(record.get("p95"));
+      BigDecimal p99 = getBigDecimal(record.get("p99"));
+      Long successCount = getLong(record.get("success_count"));
+      Long errorCount = getLong(record.get("error_count"));
+      Long totalCount = getLong(record.get("total_count"));
 
-    if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
-        p99 != null || successCount != null || errorCount != null || totalCount != null) {
-      String spanName = (String) record.get("name");
-      SpanStatistics stats = new SpanStatistics(
-        spanName,
-        spanKind != null ? spanKind : "",
-        medianDuration != null ? medianDuration : BigDecimal.ZERO,
-        averageDuration != null ? averageDuration : BigDecimal.ZERO,
-        p50 != null ? p50 : BigDecimal.ZERO,
-        p95 != null ? p95 : BigDecimal.ZERO,
-        p99 != null ? p99 : BigDecimal.ZERO,
-        successCount != null ? successCount : 0L,
-        errorCount != null ? errorCount : 0L,
-        totalCount != null ? totalCount : 0L
-      );
-      builder.statistics(stats);
+      if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
+          p99 != null || successCount != null || errorCount != null || totalCount != null) {
+        String spanName = (String) record.get("name");
+        SpanStatistics stats = new SpanStatistics(
+          spanName,
+          spanKind != null ? spanKind : "",
+          medianDuration != null ? medianDuration : BigDecimal.ZERO,
+          averageDuration != null ? averageDuration : BigDecimal.ZERO,
+          p50 != null ? p50 : BigDecimal.ZERO,
+          p95 != null ? p95 : BigDecimal.ZERO,
+          p99 != null ? p99 : BigDecimal.ZERO,
+          successCount != null ? successCount : 0L,
+          errorCount != null ? errorCount : 0L,
+          totalCount != null ? totalCount : 0L
+        );
+        builder.statistics(stats);
+      }
     }
 
     @SuppressWarnings("unchecked")
@@ -209,12 +218,16 @@ public final class ClickHouseResultMapper {
   }
 
   static List<Span> toSpans(QueryResponse response, Client client) {
+    return toSpans(response, client, true);
+  }
+
+  static List<Span> toSpans(QueryResponse response, Client client, boolean includeSpanStatistics) {
     List<Span> spans = new ArrayList<>();
 
     try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {
       while (reader.hasNext()) {
         Map<String, Object> record = reader.next();
-        spans.add(toSpan(record));
+        spans.add(toSpan(record, includeSpanStatistics));
       }
     } catch (Exception e) {
       throw new RuntimeException("Failed to read spans from ClickHouse", e);
