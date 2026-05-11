@@ -20,9 +20,9 @@ class ZipkinClickhouseStorageProperties {
   private boolean strictTraceId = true;
   private List<String> autocompleteKeys = new ArrayList<>();
   private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
-  private boolean includeSpanStatistics = true;
+  private boolean includeSpanStatistics = false;
   private int autocompleteCardinality = 5 * 4000;
-  private int maxSpansLimitMultiplier = 100;
+  private int maxSpansLimitMultiplier = 50;
   private int batchSize = 10000;
   private int autoFlushIntervalMs = 5000;
 

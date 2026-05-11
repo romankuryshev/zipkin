@@ -31,7 +31,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     queryParams.put("endTimeMicros", endTsMicros);
 
     StringBuilder inner = new StringBuilder();
-    inner.append("SELECT trace_id, trace_id_high FROM ").append(database).append(".spans")
+    inner.append("SELECT DISTINCT trace_id FROM ").append(database).append(".spans")
       .append(" WHERE timestamp >= fromUnixTimestamp64Micro({startTimeMicros:Int64})")
       .append(" AND timestamp <= fromUnixTimestamp64Micro({endTimeMicros:Int64})");
 
@@ -81,7 +81,6 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     }
 
     inner.append(" ORDER BY timestamp DESC")
-      .append(" LIMIT 1 BY (trace_id, trace_id_high)")
       .append(" LIMIT ").append(request.limit());
 
     StringBuilder sql = new StringBuilder();
@@ -91,8 +90,6 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
       .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, s.shared, s.debug");
 
     if (includeSpanStatistics) {
-      // Explicit AS aliases: ClickHouse may otherwise return columns as "stats.<col>",
-      // which would make record.get("median_duration") miss and throw NoSuchColumnException.
       sql.append(", stats.median_duration AS median_duration")
         .append(", stats.average_duration AS average_duration")
         .append(", stats.p50 AS p50")
@@ -112,8 +109,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
       }
     }
 
-    sql.append(" WHERE (s.trace_id, s.trace_id_high) GLOBAL IN (").append(inner).append(")")
-      .append(" ORDER BY s.timestamp DESC")
+    sql.append(" WHERE s.trace_id IN (").append(inner).append(")")
       .append(" LIMIT ").append((long) request.limit() * maxSpansLimitMultiplier);
 
     List<GenericRecord> rows = client.queryAll(sql.toString(), queryParams, newQuerySettings());

@@ -1,15 +1,55 @@
 math.randomseed(os.time())
 
+local SERVICES = {
+  "gateway", "auth", "backend", "db", "cache", "payments", "users", "orders",
+  "inventory", "search", "recommendation", "email", "notification", "billing",
+  "analytics", "logging", "metrics", "api", "gateway-v2", "auth-v2",
+  "profile", "media", "cdn", "upload", "download", "worker", "scheduler",
+  "queue", "kafka", "rabbitmq", "redis-cache", "mysql-db", "postgres-db",
+  "mongo-db", "elastic", "ai-service", "ml-inference", "fraud-detection",
+  "geo-service", "feature-flag", "config-service", "rate-limiter"
+}
+
+local OPERATIONS = {
+  "GET/api",
+  "POST auth",
+  "GET/data",
+  "PUT/profile",
+  "DELETE/item",
+  "POST/orders",
+  "GET/search",
+  "GET/recommendations",
+  "POST/email/send",
+  "GET/metrics",
+  "POST/login",
+  "POST/logout"
+}
+
+local function random_service()
+  return SERVICES[math.random(1, #SERVICES)]
+end
+
+local function random_operation()
+  return OPERATIONS[math.random(1, #OPERATIONS)]
+end
+
+local MONTH_SECONDS = 30 * 24 * 60 * 60
+
+-- фиксируем "конец окна" как текущее время
+local TIME_END = os.time()
+local TIME_START = TIME_END - MONTH_SECONDS
+
+local function random_time_micros()
+  local t = math.random(TIME_START, TIME_END)
+  return t * 1000000 + math.random(0, 999999)
+end
+
 local function random_hex(len)
   local res = ""
   for i = 1, len do
     res = res .. string.format("%x", math.random(0, 15))
   end
   return res
-end
-
-local function now_micros()
-  return os.time() * 1000000 + math.random(0, 999999)
 end
 
 local function random_ip()
@@ -27,7 +67,6 @@ local function maybe_error()
   return ''
 end
 
-
 local TRACES_PER_REQUEST = 4
 
 local LAT = {
@@ -43,16 +82,13 @@ local function rand_latency(range)
   return math.random(range[1], range[2])
 end
 
-
 local function span(json)
   return json
 end
 
-
 local function generate_trace()
   local spans = {}
   local traceId = random_hex(16)
-
   local client_ip = random_ip()
 
   local gateway_id = random_hex(16)
@@ -61,12 +97,12 @@ local function generate_trace()
 {
   "id": "%s",
   "traceId": "%s",
-  "name": "GET /api",
+  "name": "%s",
   "timestamp": %d,
   "duration": %d,
   "kind": "SERVER",
   "localEndpoint": {
-    "serviceName": "gateway",
+    "serviceName": "%s",
     "ipv4": "10.0.0.1",
     "port": 8080
   },
@@ -79,49 +115,60 @@ local function generate_trace()
     "http.status_code": "200"
   }
 }]],
-    gateway_id, traceId, now_micros(),
+    gateway_id,
+    traceId,
+    random_operation(),
+    random_time_micros(),
     rand_latency(LAT.gateway),
+    random_service(),
     client_ip
   )))
 
   local auth_id = random_hex(16)
 
+  -- auth client
   table.insert(spans, span(string.format([[
 {
   "id": "%s",
   "traceId": "%s",
   "parentId": "%s",
-  "name": "POST /auth",
+  "name": "%s",
   "timestamp": %d,
   "duration": %d,
   "kind": "CLIENT",
   "localEndpoint": {
-    "serviceName": "gateway"
+    "serviceName": "%s"
   },
   "remoteEndpoint": {
-    "serviceName": "auth",
+    "serviceName": "%s",
     "ipv4": "10.0.0.3",
     "port": 8081
   }
 }]],
-    auth_id, traceId, gateway_id,
-    now_micros(),
-    rand_latency(LAT.auth)
+    auth_id,
+    traceId,
+    gateway_id,
+    random_operation(),
+    random_time_micros(),
+    rand_latency(LAT.auth),
+    random_service(),
+    random_service()
   )))
 
   local auth_srv_id = random_hex(16)
 
+  -- auth server
   table.insert(spans, span(string.format([[
 {
   "id": "%s",
   "traceId": "%s",
   "parentId": "%s",
-  "name": "POST /auth",
+  "name": "%s",
   "timestamp": %d,
   "duration": %d,
   "kind": "SERVER",
   "localEndpoint": {
-    "serviceName": "auth",
+    "serviceName": "%s",
     "ipv4": "10.0.0.3",
     "port": 8081
   },
@@ -129,37 +176,46 @@ local function generate_trace()
     "auth.success": "true"
   }
 }]],
-    auth_srv_id, traceId, auth_id,
-    now_micros(),
-    rand_latency(LAT.auth)
+    auth_srv_id,
+    traceId,
+    auth_id,
+    random_operation(),
+    random_time_micros(),
+    rand_latency(LAT.auth),
+    random_service()
   )))
 
   local backend_id = random_hex(16)
 
+  -- backend client
   table.insert(spans, span(string.format([[
 {
   "id": "%s",
   "traceId": "%s",
   "parentId": "%s",
-  "name": "GET /data",
+  "name": "%s",
   "timestamp": %d,
   "duration": %d,
   "kind": "CLIENT",
   "localEndpoint": {
-    "serviceName": "gateway"
+    "serviceName": "%s"
   },
   "remoteEndpoint": {
-    "serviceName": "backend",
+    "serviceName": "%s",
     "ipv4": "10.0.0.2",
     "port": 9000
   }
 }]],
-    backend_id, traceId, gateway_id,
-    now_micros(),
-    rand_latency(LAT.backend)
+    backend_id,
+    traceId,
+    gateway_id,
+    random_operation(),
+    random_time_micros(),
+    rand_latency(LAT.backend),
+    random_service(),
+    random_service()
   )))
 
-  -- backend SERVER
   local backend_srv_id = random_hex(16)
 
   table.insert(spans, span(string.format([[
@@ -167,100 +223,23 @@ local function generate_trace()
   "id": "%s",
   "traceId": "%s",
   "parentId": "%s",
-  "name": "GET /data",
+  "name": "%s",
   "timestamp": %d,
   "duration": %d,
   "kind": "SERVER",
   "localEndpoint": {
-    "serviceName": "backend",
+    "serviceName": "%s",
     "ipv4": "10.0.0.2",
     "port": 9000
   }
 }]],
-    backend_srv_id, traceId, backend_id,
-    now_micros(),
-    rand_latency(LAT.backend)
-  )))
-
-  local db_id = random_hex(16)
-
-  table.insert(spans, span(string.format([[
-{
-  "id": "%s",
-  "traceId": "%s",
-  "parentId": "%s",
-  "name": "SELECT users",
-  "timestamp": %d,
-  "duration": %d,
-  "kind": "CLIENT",
-  "localEndpoint": {
-    "serviceName": "backend"
-  },
-  "remoteEndpoint": {
-    "serviceName": "mysql",
-    "ipv4": "10.0.0.10",
-    "port": 3306
-  },
-  "tags": {
-    "db.type": "sql",
-    %s
-    "component": "mysql"
-  }
-}]],
-    db_id, traceId, backend_srv_id,
-    now_micros(),
-    rand_latency(LAT.db),
-    maybe_error()
-  )))
-
-  local cache_id = random_hex(16)
-
-  table.insert(spans, span(string.format([[
-{
-  "id": "%s",
-  "traceId": "%s",
-  "parentId": "%s",
-  "name": "GET cache",
-  "timestamp": %d,
-  "duration": %d,
-  "kind": "CLIENT",
-  "localEndpoint": {
-    "serviceName": "backend"
-  },
-  "remoteEndpoint": {
-    "serviceName": "redis",
-    "ipv4": "10.0.0.11",
-    "port": 6379
-  }
-}]],
-    cache_id, traceId, backend_srv_id,
-    now_micros(),
-    rand_latency(LAT.cache)
-  )))
-
-  local ext_id = random_hex(16)
-
-  table.insert(spans, span(string.format([[
-{
-  "id": "%s",
-  "traceId": "%s",
-  "parentId": "%s",
-  "name": "GET external",
-  "timestamp": %d,
-  "duration": %d,
-  "kind": "CLIENT",
-  "localEndpoint": {
-    "serviceName": "backend"
-  },
-  "remoteEndpoint": {
-    "serviceName": "payments",
-    "ipv4": "52.12.34.56",
-    "port": 443
-  }
-}]],
-    ext_id, traceId, backend_srv_id,
-    now_micros(),
-    rand_latency(LAT.external)
+    backend_srv_id,
+    traceId,
+    backend_id,
+    random_operation(),
+    random_time_micros(),
+    rand_latency(LAT.backend),
+    random_service()
   )))
 
   return spans

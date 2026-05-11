@@ -46,20 +46,20 @@ cleanup() {
     wait "$ZIPKIN_PID" 2>/dev/null || true
   fi
 
-  echo "--- Stopping infrastructure ---"
-  case "$BACKEND" in
-    elasticsearch)
-      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" stop storage 2>/dev/null || true
-      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" rm -f storage 2>/dev/null || true
-      ;;
-    clickhouse)
-      docker compose -f "${COMPOSE_DIR}/docker-compose-clickhouse.yaml" down 2>/dev/null || true
-      ;;
-    cassandra)
-      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" stop storage 2>/dev/null || true
-      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" rm -f storage 2>/dev/null || true
-      ;;
-  esac
+#  echo "--- Stopping infrastructure ---"
+#  case "$BACKEND" in
+#    elasticsearch)
+#      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" stop storage 2>/dev/null || true
+#      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" rm -f storage 2>/dev/null || true
+#      ;;
+#    clickhouse)
+#      docker compose -f "${COMPOSE_DIR}/docker-compose-clickhouse.yaml" down 2>/dev/null || true
+#      ;;
+#    cassandra)
+#      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" stop storage 2>/dev/null || true
+#      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" rm -f storage 2>/dev/null || true
+#      ;;
+#  esac
 }
 trap cleanup EXIT
 
@@ -176,21 +176,21 @@ echo "======================================================================"
 echo "  Benchmark: ${BACKEND}"
 echo "  Results:   ${RESULTS_DIR}"
 echo "======================================================================"
-
-start_infra
-start_zipkin
-
-echo ""
-echo "--- Warmup (200 rps, 20s) ---"
-wrk2 -t2 -c20 -d20s -R200 \
-  -s "${SCRIPT_DIR}/zipkin_microservices.lua" \
-  "${ZIPKIN_URL}" > /dev/null 2>&1
-
-echo ""
-echo "--- Write tests (POST /api/v2/spans) ---"
-for RATE in 200 500 1000 2000; do
-  run_wrk2 "write_${RATE}rps" "${RATE}" 4 50 "zipkin_microservices.lua"
-done
+#
+#start_infra
+#start_zipkin
+#
+#echo ""
+#echo "--- Warmup (200 rps, 20s) ---"
+#wrk2 -t2 -c20 -d20s -R200 \
+#  -s "${SCRIPT_DIR}/zipkin_microservices.lua" \
+#  "${ZIPKIN_URL}" > /dev/null 2>&1
+#
+#echo ""
+#echo "--- Write tests (POST /api/v2/spans) ---"
+#for RATE in 200 500 1000 2000; do
+#  run_wrk2 "write_${RATE}rps" "${RATE}" 4 50 "zipkin_microservices.lua"
+#done
 
 echo ""
 echo "--- Read tests (GET /api/v2/traces) ---"

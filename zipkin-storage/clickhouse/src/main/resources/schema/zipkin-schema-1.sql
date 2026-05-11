@@ -37,39 +37,24 @@ CREATE TABLE IF NOT EXISTS spans
   annotations                  Array(Tuple(timestamp DateTime64(6), value String)),
   tags                         Map(String, String),
   status_code                  LowCardinality(String),
-  shared                       UInt8 DEFAULT 0,
-  debug                        UInt8 DEFAULT 0
+  shared                       UInt8  DEFAULT 0,
+  debug                        UInt8  DEFAULT 0
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
-    ORDER BY (local_endpoint_service_name, name, timestamp, trace_id)
-    SETTINGS index_granularity = 8192;
+    ORDER BY (local_endpoint_service_name, name, -toUnixTimestamp64Micro(timestamp), trace_id, trace_id_high)
+    SETTINGS index_granularity = 1024;
 
 ALTER TABLE spans
   ADD PROJECTION IF NOT EXISTS spans_prj_service_name
     (
     SELECT *
-    ORDER BY (trace_id)
+    ORDER BY (trace_id, trace_id_high, -toUnixTimestamp64Micro(timestamp))
     );
 
--- Thin index-projection for trace lookup (analog of Cassandra's trace_by_service_span):
--- only 6 columns instead of 21 → dramatically less I/O for the inner query.
--- Also covers spanName/remoteService/duration filters without falling back to the wide table.
 ALTER TABLE spans
-  ADD PROJECTION IF NOT EXISTS spans_prj_service_ts
-    (
-    SELECT
-      local_endpoint_service_name,
-      remote_endpoint_service_name,
-      name,
-      duration,
-      timestamp,
-      trace_id,
-      trace_id_high
-    ORDER BY (local_endpoint_service_name, timestamp, trace_id, trace_id_high)
-    );
-
-ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
-ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
+  ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
+ALTER TABLE spans
+  ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
 
 CREATE TABLE IF NOT EXISTS spans_aggregate_stats
 (
@@ -88,17 +73,17 @@ CREATE TABLE IF NOT EXISTS spans_aggregate_stats
     ORDER BY (span_name, span_kind, service_name);
 
 CREATE MATERIALIZED VIEW spans_aggregate_mv TO spans_aggregate_stats AS
-SELECT name                                                    AS span_name,
-       kind                                                    AS span_kind,
-       local_endpoint_service_name                             AS service_name,
-       medianState(CAST(duration AS Float64))                  AS median_duration,
-       avgState(CAST(duration AS Float64))                     AS average_duration,
-       quantilesState(0.5)(CAST(duration AS Float64))          AS p50,
-       quantilesState(0.95)(CAST(duration AS Float64))         AS p95,
-       quantilesState(0.99)(CAST(duration AS Float64))         AS p99,
-       sumState(CAST(if(status_code != 'error', 1, 0) AS UInt64))  AS success_count,
-       sumState(CAST(if(status_code = 'error', 1, 0) AS UInt64)) AS error_count,
-       sumState(CAST(1 AS UInt64))                             AS total_count
+SELECT name                                                       AS span_name,
+       kind                                                       AS span_kind,
+       local_endpoint_service_name                                AS service_name,
+       medianState(CAST(duration AS Float64))                     AS median_duration,
+       avgState(CAST(duration AS Float64))                        AS average_duration,
+       quantilesState(0.5)(CAST(duration AS Float64))             AS p50,
+       quantilesState(0.95)(CAST(duration AS Float64))            AS p95,
+       quantilesState(0.99)(CAST(duration AS Float64))            AS p99,
+       sumState(CAST(if(status_code != 'error', 1, 0) AS UInt64)) AS success_count,
+       sumState(CAST(if(status_code = 'error', 1, 0) AS UInt64))  AS error_count,
+       sumState(CAST(1 AS UInt64))                                AS total_count
 FROM spans
 GROUP BY name, span_kind, service_name
 ORDER BY name, span_kind, service_name;

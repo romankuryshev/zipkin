@@ -312,6 +312,11 @@ public final class ClickHouseResultMapper {
   }
 
   // ── GenericRecord path (used by queryAll) ───────────────────────────────────
+static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
+    return rows.stream()
+      .map(row -> row.getBigInteger("trace_id"))
+      .toList();
+}
 
   static List<Span> toSpans(List<GenericRecord> rows, boolean includeSpanStatistics) {
     List<Span> spans = new ArrayList<>(rows.size());
