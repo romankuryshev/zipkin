@@ -90,8 +90,7 @@ public class ClickHouseSpanConsumer implements SpanConsumer {
   private void flushBufferAsync() {
     if (!buffer.isEmpty()) {
       try {
-        Call<Void> call = flushBuffer();
-        call.execute();
+        forceFlush();
         log.debug("Buffer flushed successfully");
       } catch (Exception e) {
         log.error("Error flushing buffer to ClickHouse", e);
