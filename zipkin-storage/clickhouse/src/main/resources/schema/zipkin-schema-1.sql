@@ -41,18 +41,15 @@ CREATE TABLE IF NOT EXISTS spans
   debug                        UInt8  DEFAULT 0
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
-    ORDER BY (local_endpoint_service_name, name, -toUnixTimestamp64Micro(timestamp), trace_id, trace_id_high)
+    ORDER BY (trace_id, trace_id_high, timestamp)
     SETTINGS index_granularity = 1024;
 
 ALTER TABLE spans
-  ADD PROJECTION IF NOT EXISTS spans_prj_service_name
-    (
-    SELECT *
-    ORDER BY (trace_id, trace_id_high, -toUnixTimestamp64Micro(timestamp))
+  ADD PROJECTION spans_idx(
+    SELECT trace_id, trace_id_high, timestamp, local_endpoint_service_name, name, duration
+    ORDER BY (timestamp, local_endpoint_service_name, name, duration, trace_id)
     );
 
-ALTER TABLE spans
-  ADD INDEX IF NOT EXISTS idx_ts timestamp TYPE minmax GRANULARITY 4;
 ALTER TABLE spans
   ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
 

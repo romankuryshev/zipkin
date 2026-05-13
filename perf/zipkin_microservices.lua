@@ -1,4 +1,13 @@
-math.randomseed(os.time())
+local counter = 0
+
+function setup(thread)
+  counter = counter + 1
+  thread:set("id", counter)
+end
+
+function init(args)
+  math.randomseed(os.time() + id * 1000)
+end
 
 local SERVICES = {
   "gateway", "auth", "backend", "db", "cache", "payments", "users", "orders",

@@ -13,8 +13,11 @@ version: '2.4'
 
 services:
   storage:
-    image: ghcr.io/openzipkin/zipkin-elasticsearch8:${TAG:-latest}
+    image: elasticsearch:7.17.28
     container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
     ports:
       - 9200:9200
 

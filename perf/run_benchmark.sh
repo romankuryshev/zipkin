@@ -1,18 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# run_benchmark.sh <backend>
-#
-# Backends: mem | elasticsearch | clickhouse | cassandra
-#
-# Usage:
-#   cd perf/
-#   ./run_benchmark.sh mem
-#   ./run_benchmark.sh elasticsearch
-#   ./run_benchmark.sh clickhouse
-#   ./run_benchmark.sh cassandra
-# ---------------------------------------------------------------------------
 
 BACKEND=${1:-}
 if [[ -z "$BACKEND" ]]; then
@@ -46,20 +34,20 @@ cleanup() {
     wait "$ZIPKIN_PID" 2>/dev/null || true
   fi
 
-#  echo "--- Stopping infrastructure ---"
-#  case "$BACKEND" in
-#    elasticsearch)
-#      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" stop storage 2>/dev/null || true
-#      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" rm -f storage 2>/dev/null || true
-#      ;;
-#    clickhouse)
-#      docker compose -f "${COMPOSE_DIR}/docker-compose-clickhouse.yaml" down 2>/dev/null || true
-#      ;;
-#    cassandra)
-#      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" stop storage 2>/dev/null || true
-#      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" rm -f storage 2>/dev/null || true
-#      ;;
-#  esac
+  echo "--- Stopping infrastructure ---"
+  case "$BACKEND" in
+    elasticsearch)
+      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" stop storage 2>/dev/null || true
+      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" rm -f storage 2>/dev/null || true
+      ;;
+    clickhouse)
+      docker compose -f "${COMPOSE_DIR}/docker-compose-clickhouse.yaml" down 2>/dev/null || true
+      ;;
+    cassandra)
+      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" stop storage 2>/dev/null || true
+      docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" rm -f storage 2>/dev/null || true
+      ;;
+  esac
 }
 trap cleanup EXIT
 
@@ -154,7 +142,7 @@ start_zipkin() {
 
 # ---------------------------------------------------------------------------
 run_wrk2() {
-  local label=$1   # e.g. "write_1000rps"
+  local label=$1
   local rate=$2
   local threads=$3
   local conns=$4
@@ -167,7 +155,6 @@ run_wrk2() {
     "${ZIPKIN_URL}" \
     > "${out}" 2>&1
 
-  # Print summary line
   grep -E "Requests/sec:|50\.000%|99\.000%" "${out}" | head -5 | sed 's/^/    /'
 }
 
@@ -176,21 +163,21 @@ echo "======================================================================"
 echo "  Benchmark: ${BACKEND}"
 echo "  Results:   ${RESULTS_DIR}"
 echo "======================================================================"
-#
-#start_infra
-#start_zipkin
-#
-#echo ""
-#echo "--- Warmup (200 rps, 20s) ---"
-#wrk2 -t2 -c20 -d20s -R200 \
-#  -s "${SCRIPT_DIR}/zipkin_microservices.lua" \
-#  "${ZIPKIN_URL}" > /dev/null 2>&1
-#
-#echo ""
-#echo "--- Write tests (POST /api/v2/spans) ---"
-#for RATE in 200 500 1000 2000; do
-#  run_wrk2 "write_${RATE}rps" "${RATE}" 4 50 "zipkin_microservices.lua"
-#done
+
+start_infra
+start_zipkin
+
+echo ""
+echo "--- Warmup (200 rps, 20s) ---"
+wrk2 -t2 -c20 -d20s -R200 \
+  -s "${SCRIPT_DIR}/zipkin_microservices.lua" \
+  "${ZIPKIN_URL}" > /dev/null 2>&1
+
+echo ""
+echo "--- Write tests (POST /api/v2/spans) ---"
+for RATE in 200 500 1000 2000; do
+  run_wrk2 "write_${RATE}rps" "${RATE}" 4 50 "zipkin_microservices.lua"
+done
 
 echo ""
 echo "--- Read tests (GET /api/v2/traces) ---"

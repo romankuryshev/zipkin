@@ -9,15 +9,21 @@
 # It extends the default configuration from docker-compose.yml to run the
 # zipkin-cassandra container instead of the zipkin-mysql container.
 
-version: '2.4'
+version: '3.8'
 
 services:
   storage:
-    image: ghcr.io/openzipkin/zipkin-cassandra:${TAG:-latest}
+    image: cassandra:3.11
     # Uncomment to use DSE instead (minimum version 5.1)
     # image: datastax/dse-server:5.1.20
     # environment:
     #  - DS_LICENSE=accept
+    environment:
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 256M
+      CASSANDRA_CLUSTER_NAME: zipkin
+      CASSANDRA_DC: dc1
+      CASSANDRA_RACK: rack1
     container_name: cassandra
     ports:
       - 9042:9042

@@ -12,6 +12,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   private final QueryRequest request;
   private final int maxSpansLimitMultiplier;
   private final boolean includeSpanStatistics;
+  private static final int multIndex = 3;
 
   public GetTracesCall(Client client, String database, QueryRequest request,
                        int maxSpansLimitMultiplier, boolean includeSpanStatistics) {
@@ -31,7 +32,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     queryParams.put("endTimeMicros", endTsMicros);
 
     StringBuilder inner = new StringBuilder();
-    inner.append("SELECT DISTINCT trace_id FROM ").append(database).append(".spans")
+    inner.append("SELECT trace_id FROM ").append(database).append(".spans")
       .append(" WHERE timestamp >= fromUnixTimestamp64Micro({startTimeMicros:Int64})")
       .append(" AND timestamp <= fromUnixTimestamp64Micro({endTimeMicros:Int64})");
 
@@ -80,8 +81,7 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
       }
     }
 
-    inner.append(" ORDER BY timestamp DESC")
-      .append(" LIMIT ").append(request.limit());
+    inner.append(" LIMIT ").append(request.limit() * multIndex);
 
     StringBuilder sql = new StringBuilder();
     sql.append("SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, ")
