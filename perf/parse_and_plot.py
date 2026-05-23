@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""
-Parse wrk2 result files and generate comparison charts for the thesis.
-
-Directory layout expected:
-  perf/results/<backend>/write_<rate>rps.txt
-  perf/results/<backend>/read_<rate>rps.txt
-
-Run from the perf/ directory:
-  python3 parse_and_plot.py
-"""
 
 import os
 import re
@@ -29,18 +19,20 @@ RESULTS_DIR = Path(__file__).parent / "results"
 PLOTS_DIR = RESULTS_DIR / "plots"
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-BACKENDS = ["mem", "elasticsearch", "clickhouse", "cassandra"]
+BACKENDS = ["mem", "elasticsearch", "clickhouse", "cassandra", "mysql"]
 BACKEND_LABELS = {
     "mem":           "In-Memory",
     "elasticsearch": "Elasticsearch",
     "clickhouse":    "ClickHouse",
     "cassandra":     "Cassandra",
+    "mysql":         "MySQL",
 }
 COLORS = {
     "mem":           "#4e79a7",
     "elasticsearch": "#f28e2b",
     "clickhouse":    "#e15759",
     "cassandra":     "#76b7b2",
+    "mysql":         "#59a14f",
 }
 
 WRITE_RATES = [200, 500, 1000, 2000]

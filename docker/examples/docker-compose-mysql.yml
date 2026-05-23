@@ -15,11 +15,23 @@ version: '2.4'
 
 services:
   storage:
-    image: ghcr.io/openzipkin/zipkin-mysql:${TAG:-latest}
+    image: mysql:8.4
     container_name: mysql
-    # Uncomment to expose the storage port for testing
     ports:
       - 3306:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=zipkin
+      - MYSQL_DATABASE=zipkin
+      - MYSQL_USER=zipkin
+      - MYSQL_PASSWORD=zipkin
+    volumes:
+      - ../../zipkin-storage/mysql-v1/src/main/resources/mysql.sql:/docker-entrypoint-initdb.d/zipkin.sql:ro
+    healthcheck:
+      test: ["CMD", "mysql", "-h", "127.0.0.1", "-uzipkin", "-pzipkin", "zipkin", "-e", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   # Use MySQL instead of in-memory storage
 #  zipkin:

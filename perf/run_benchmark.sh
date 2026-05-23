@@ -4,7 +4,7 @@ set -euo pipefail
 
 BACKEND=${1:-}
 if [[ -z "$BACKEND" ]]; then
-  echo "Usage: $0 <mem|elasticsearch|clickhouse|cassandra>"
+  echo "Usage: $0 <mem|elasticsearch|clickhouse|cassandra|mysql>"
   exit 1
 fi
 
@@ -47,6 +47,10 @@ cleanup() {
       docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" stop storage 2>/dev/null || true
       docker compose -f "${COMPOSE_DIR}/docker-compose-cassandra.yml" rm -f storage 2>/dev/null || true
       ;;
+    mysql)
+      docker compose -f "${COMPOSE_DIR}/docker-compose-mysql.yml" stop storage 2>/dev/null || true
+      docker compose -f "${COMPOSE_DIR}/docker-compose-mysql.yml" rm -f storage 2>/dev/null || true
+      ;;
   esac
 }
 trap cleanup EXIT
@@ -86,6 +90,16 @@ start_infra() {
       done
       echo " ready"
       ;;
+    mysql)
+      echo "--- Starting MySql ---"
+      docker compose -f "${COMPOSE_DIR}/docker-compose-mysql.yml" up -d storage
+      echo -n "Waiting for MySql..."
+      until docker compose -f "${COMPOSE_DIR}/docker-compose-mysql.yml" ps storage \
+            | grep -q "healthy"; do
+        echo -n "."; sleep 5
+      done
+      echo " ready"
+      ;;
   esac
 }
 
@@ -115,7 +129,15 @@ start_zipkin() {
     cassandra)
       STORAGE_TYPE=cassandra3 \
       CASSANDRA_CONTACT_POINTS=localhost \
-      CASSANDRA_ENSURE_SCHEMA=false \
+      CASSANDRA_ENSURE_SCHEMA=true \
+        java -jar "${JAR}" > "${log_file}" 2>&1 &
+      ;;
+    mysql)
+      STORAGE_TYPE=mysql \
+      MYSQL_HOST=localhost \
+      MYSQL_USER=zipkin \
+      MYSQL_PASS=zipkin \
+      MYSQL_DB=zipkin \
         java -jar "${JAR}" > "${log_file}" 2>&1 &
       ;;
   esac
