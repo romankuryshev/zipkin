@@ -38,7 +38,7 @@ cleanup() {
   case "$BACKEND" in
     elasticsearch)
       docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" stop storage 2>/dev/null || true
-      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" rm -f storage 2>/dev/null || true
+#      docker compose -f "${COMPOSE_DIR}/docker-compose-elasticsearch.yml" rm -f storage 2>/dev/null || true
       ;;
     clickhouse)
       docker compose -f "${COMPOSE_DIR}/docker-compose-clickhouse.yaml" down 2>/dev/null || true
@@ -116,7 +116,7 @@ start_zipkin() {
     elasticsearch)
       STORAGE_TYPE=elasticsearch \
       ES_HOSTS=localhost:9200 \
-        java -jar "${JAR}" > "${log_file}" 2>&1 &
+        java -XX:TieredStopAtLevel=1 -Dio.netty.transport.noNative=true -jar "${JAR}" > "${log_file}" 2>&1 &
       ;;
     clickhouse)
       STORAGE_TYPE=clickhouse \
@@ -186,29 +186,31 @@ echo "  Benchmark: ${BACKEND}"
 echo "  Results:   ${RESULTS_DIR}"
 echo "======================================================================"
 
-start_infra
+#start_infra
 start_zipkin
+#
+#echo ""
+#echo "--- Warmup (200 rps, 20s) ---"
+#wrk2 -t2 -c20 -d20s -R200 \
+#  -s "${SCRIPT_DIR}/zipkin_microservices.lua" \
+#  "${ZIPKIN_URL}" > /dev/null 2>&1
+#
+#echo ""
+#echo "--- Write tests (POST /api/v2/spans) ---"
+#for RATE in 200 500 1000 2000; do
+#  run_wrk2 "write_${RATE}rps" "${RATE}" 4 50 "zipkin_microservices.lua"
+#done
+#
 
 echo ""
-echo "--- Warmup (200 rps, 20s) ---"
-wrk2 -t2 -c20 -d20s -R200 \
-  -s "${SCRIPT_DIR}/zipkin_microservices.lua" \
-  "${ZIPKIN_URL}" > /dev/null 2>&1
-
-echo ""
-echo "--- Write tests (POST /api/v2/spans) ---"
-for RATE in 200 500 1000 2000; do
-  run_wrk2 "write_${RATE}rps" "${RATE}" 4 50 "zipkin_microservices.lua"
-done
+echo "--- Warmup read tests---"
+wrk2 -t2 -c10 -d20s -R10 \
+  -s "${SCRIPT_DIR}/read_test.lua" \
+    "${ZIPKIN_URL}" > /dev/null 2>&1
 
 echo ""
 echo "--- Read tests (GET /api/v2/traces) ---"
 for RATE in 50 100 200; do
-  run_wrk2 "read_${RATE}rps" "${RATE}" 2 20 "read_test.lua"
+  run_wrk2 "read_${RATE}rps" "${RATE}" 2 10 "read_test.lua"
 done
 
-echo ""
-echo "======================================================================"
-echo "  Done. Results saved to: ${RESULTS_DIR}"
-echo "  Run 'python3 parse_and_plot.py' to generate charts."
-echo "======================================================================"

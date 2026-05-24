@@ -25,22 +25,22 @@
      / /_ | ||  __/| . \ | || |\  |
     |____|___|_|   |_|\_\___|_| \_|
 
-:: version 3.6.0-SNAPSHOT :: commit e938f24 ::
+:: version 3.6.0-SNAPSHOT :: commit c39ba1d ::
 
-2026-05-14T21:02:36.359+03:00  WARN [/] 9571 --- [           main] i.m.p.PrometheusMeterRegistry            : A MeterFilter is being configured after a Meter has been registered to this registry. All MeterFilters should be configured before any Meters are registered. If that is not possible or you have a use case where it should be allowed, let the Micrometer maintainers know at https://github.com/micrometer-metrics/micrometer/issues/4920. Enable DEBUG level logging on this logger to see a stack trace of the call configuring this MeterFilter.
-2026-05-14T21:02:36.501+03:00  INFO [/] 9571 --- [oss-http-*:9411] c.l.a.s.Server                           : Serving HTTP at /[0:0:0:0:0:0:0:0]:9411 - http://127.0.0.1:9411/
-2026-05-14T21:02:40.432+03:00  WARN [/] 9571 --- [        s0-io-3] c.d.o.d.i.c.m.DefaultTopologyMonitor     : [s0] Unable to determine broadcast RPC port.  Trying to fall back to port used by the control connection.
-2026-05-14T21:02:40.509+03:00  INFO [/] 9571 --- [cking-tasks-1-1] z.s.c.Schema                             : Detected Cassandra version 3.11.19
-2026-05-14T21:02:40.510+03:00  INFO [/] 9571 --- [cking-tasks-1-1] z.s.c.Schema                             : Installing schema /zipkin2-schema.cql for keyspace zipkin2
-2026-05-14T21:02:46.010+03:00  INFO [/] 9571 --- [cking-tasks-1-1] z.s.c.Schema                             : Installing indexes /zipkin2-schema-indexes.cql for keyspace zipkin2
-2026-05-14T21:02:48.274+03:00  WARN [/] 9571 --- [     s0-admin-0] c.d.o.d.i.c.c.CqlRequestHandler          : Query '[0 values] CREATE CUSTOM INDEX IF NOT EXISTS ON zipkin2.span (l_service) USING 'org.apache.cassandra.index.sasi.SASIIndex'
+2026-05-23T20:32:57.555+03:00  WARN [/] 9259 --- [           main] i.m.p.PrometheusMeterRegistry            : A MeterFilter is being configured after a Meter has been registered to this registry. All MeterFilters should be configured before any Meters are registered. If that is not possible or you have a use case where it should be allowed, let the Micrometer maintainers know at https://github.com/micrometer-metrics/micrometer/issues/4920. Enable DEBUG level logging on this logger to see a stack trace of the call configuring this MeterFilter.
+2026-05-23T20:32:57.690+03:00  INFO [/] 9259 --- [oss-http-*:9411] c.l.a.s.Server                           : Serving HTTP at /[0:0:0:0:0:0:0:0]:9411 - http://127.0.0.1:9411/
+2026-05-23T20:32:58.706+03:00  WARN [/] 9259 --- [        s0-io-3] c.d.o.d.i.c.m.DefaultTopologyMonitor     : [s0] Unable to determine broadcast RPC port.  Trying to fall back to port used by the control connection.
+2026-05-23T20:32:58.801+03:00  INFO [/] 9259 --- [cking-tasks-1-1] z.s.c.Schema                             : Detected Cassandra version 3.11.19
+2026-05-23T20:32:58.801+03:00  INFO [/] 9259 --- [cking-tasks-1-1] z.s.c.Schema                             : Installing schema /zipkin2-schema.cql for keyspace zipkin2
+2026-05-23T20:33:04.299+03:00  INFO [/] 9259 --- [cking-tasks-1-1] z.s.c.Schema                             : Installing indexes /zipkin2-schema-indexes.cql for keyspace zipkin2
+2026-05-23T20:33:06.535+03:00  WARN [/] 9259 --- [     s0-admin-0] c.d.o.d.i.c.c.CqlRequestHandler          : Query '[0 values] CREATE CUSTOM INDEX IF NOT EXISTS ON zipkin2.span (l_service) USING 'org.apache.cassandra.index.sasi.SASIIndex'
    WITH OPTIONS = {'mode': 'PREFIX'}' generated server side warning(s): SASI indexes are experimental and are not recommended for production use.
-2026-05-14T21:02:50.481+03:00  WARN [/] 9571 --- [     s0-admin-0] c.d.o.d.i.c.c.CqlRequestHandler          : Query '[0 values] //-- can't do SASI on set<text>: ░-joined until CASSANDRA-11182
+2026-05-23T20:33:08.740+03:00  WARN [/] 9259 --- [     s0-admin-0] c.d.o.d.i.c.c.CqlRequestHandler          : Query '[0 values] //-- can't do SASI on set<text>: ░-joined until CASSANDRA-11182
 CREATE CUSTOM INDEX IF NOT EXISTS ON zipkin2.span (annotation_query) USING 'org.apache.cassandra.index.sasi.SASIIndex'
    WITH OPTIONS = {
     'mode': 'PREFIX',
     'analyzed': 'true',
     'analyzer_class':'org.apache.cassandra.index.sasi.analyzer.DelimiterAnalyzer',
     'delimiter': '░'}' generated server side warning(s): SASI indexes are experimental and are not recommended for production use.
-2026-05-14T21:02:52.708+03:00  WARN [/] 9571 --- [     s0-admin-0] c.d.o.d.i.c.c.CqlRequestHandler          : Query '[0 values] CREATE CUSTOM INDEX IF NOT EXISTS ON zipkin2.trace_by_service_span (duration) USING 'org.apache.cassandra.index.sasi.SASIIndex'
+2026-05-23T20:33:10.979+03:00  WARN [/] 9259 --- [     s0-admin-0] c.d.o.d.i.c.c.CqlRequestHandler          : Query '[0 values] CREATE CUSTOM INDEX IF NOT EXISTS ON zipkin2.trace_by_service_span (duration) USING 'org.apache.cassandra.index.sasi.SASIIndex'
    WITH OPTIONS = {'mode': 'PREFIX'}' generated server side warning(s): SASI indexes are experimental and are not recommended for production use.

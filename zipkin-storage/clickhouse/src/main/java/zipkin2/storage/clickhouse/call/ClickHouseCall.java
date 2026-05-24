@@ -8,6 +8,7 @@ import zipkin2.Callback;
 
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
@@ -15,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class ClickHouseCall<V> extends Call.Base<V> {
   protected final Client client;
   protected final String database;
-  private static final ExecutorService EXECUTOR = ForkJoinPool.commonPool();
+  private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(20);
 
   private final AtomicReference<Future<?>> pendingFuture = new AtomicReference<>();
   private volatile String activeQueryId;

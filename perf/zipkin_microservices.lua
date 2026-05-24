@@ -97,8 +97,9 @@ end
 
 local function generate_trace()
   local spans = {}
-  local traceId = random_hex(16)
+  local traceId = random_hex(32)
   local client_ip = random_ip()
+  local timestamp = random_time_micros()
 
   local gateway_id = random_hex(16)
 
@@ -127,7 +128,7 @@ local function generate_trace()
     gateway_id,
     traceId,
     random_operation(),
-    random_time_micros(),
+    timestamp,
     rand_latency(LAT.gateway),
     random_service(),
     client_ip
@@ -158,7 +159,7 @@ local function generate_trace()
     traceId,
     gateway_id,
     random_operation(),
-    random_time_micros(),
+    timestamp,
     rand_latency(LAT.auth),
     random_service(),
     random_service()
@@ -189,7 +190,7 @@ local function generate_trace()
     traceId,
     auth_id,
     random_operation(),
-    random_time_micros(),
+    timestamp,
     rand_latency(LAT.auth),
     random_service()
   )))
@@ -219,7 +220,7 @@ local function generate_trace()
     traceId,
     gateway_id,
     random_operation(),
-    random_time_micros(),
+    timestamp,
     rand_latency(LAT.backend),
     random_service(),
     random_service()
@@ -246,7 +247,7 @@ local function generate_trace()
     traceId,
     backend_id,
     random_operation(),
-    random_time_micros(),
+    timestamp,
     rand_latency(LAT.backend),
     random_service()
   )))

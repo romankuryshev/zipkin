@@ -5,8 +5,13 @@ import com.clickhouse.client.api.query.GenericRecord;
 import zipkin2.Call;
 import zipkin2.Span;
 import zipkin2.storage.QueryRequest;
+
+import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   private final QueryRequest request;
@@ -27,38 +32,40 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
     long endTsMicros = request.endTs() * 1000L;
     long startTimeMicros = endTsMicros - request.lookback() * 1000L;
 
-    Map<String, Object> queryParams = new java.util.HashMap<>();
-    queryParams.put("startTimeMicros", startTimeMicros);
-    queryParams.put("endTimeMicros", endTsMicros);
+    Map<String, Object> innerParams = new java.util.HashMap<>();
+    innerParams.put("startTimeMicros", startTimeMicros);
+    innerParams.put("endTimeMicros", endTsMicros);
 
     StringBuilder inner = new StringBuilder();
-    inner.append("SELECT trace_id FROM ").append(database).append(".spans")
-      .append(" WHERE timestamp >= fromUnixTimestamp64Micro({startTimeMicros:Int64})")
-      .append(" AND timestamp <= fromUnixTimestamp64Micro({endTimeMicros:Int64})");
+    inner.append("SELECT trace_id, trace_id_high FROM ").append(database).append("""
+      .spans
+      WHERE timestamp >= fromUnixTimestamp64Micro({startTimeMicros:Int64})
+      AND timestamp <= fromUnixTimestamp64Micro({endTimeMicros:Int64})
+      """);
 
     if (request.serviceName() != null) {
       inner.append(" AND local_endpoint_service_name = {serviceName:String}");
-      queryParams.put("serviceName", request.serviceName().toLowerCase(java.util.Locale.ROOT));
+      innerParams.put("serviceName", request.serviceName().toLowerCase(java.util.Locale.ROOT));
     }
 
     if (request.spanName() != null) {
       inner.append(" AND name = {spanName:String}");
-      queryParams.put("spanName", request.spanName());
+      innerParams.put("spanName", request.spanName());
     }
 
     if (request.remoteServiceName() != null) {
       inner.append(" AND remote_endpoint_service_name = {remoteServiceName:String}");
-      queryParams.put("remoteServiceName", request.remoteServiceName());
+      innerParams.put("remoteServiceName", request.remoteServiceName());
     }
 
     if (request.minDuration() != null) {
       inner.append(" AND duration >= {minDuration:Int64}");
-      queryParams.put("minDuration", request.minDuration());
+      innerParams.put("minDuration", request.minDuration());
     }
 
     if (request.maxDuration() != null) {
       inner.append(" AND duration <= {maxDuration:Int64}");
-      queryParams.put("maxDuration", request.maxDuration());
+      innerParams.put("maxDuration", request.maxDuration());
     }
 
     if (request.annotationQuery() != null && !request.annotationQuery().isEmpty()) {
@@ -72,47 +79,68 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
         if (tagValue.isEmpty()) {
           inner.append(" AND (arrayExists(x -> x.2 = {").append(ki).append(":String}, annotations)")
             .append(" OR mapContains(tags, {").append(ki).append(":String}))");
-          queryParams.put(ki, tagKey);
+          innerParams.put(ki, tagKey);
         } else {
           inner.append(" AND tags[{").append(ki).append(":String}] = {").append(vi).append(":String}");
-          queryParams.put(ki, tagKey);
-          queryParams.put(vi, tagValue);
+          innerParams.put(ki, tagKey);
+          innerParams.put(vi, tagValue);
         }
       }
     }
-
-    inner.append(" LIMIT ").append(request.limit() * multIndex);
-
-    StringBuilder sql = new StringBuilder();
-    sql.append("SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code, ")
-      .append("s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port, ")
-      .append("s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port, ")
-      .append("s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, s.shared, s.debug");
-
-    if (includeSpanStatistics) {
-      sql.append(", stats.median_duration AS median_duration")
-        .append(", stats.average_duration AS average_duration")
-        .append(", stats.p50 AS p50")
-        .append(", stats.p95 AS p95")
-        .append(", stats.p99 AS p99")
-        .append(", stats.success_count AS success_count")
-        .append(", stats.error_count AS error_count")
-        .append(", stats.total_count AS total_count ");
+    inner.append(" LIMIT ").append(request.limit() * multIndex)
+      .append(" SETTINGS max_threads = 2;");
+    List<GenericRecord> traceIdsRows = client.queryAll(inner.toString(), innerParams, newQuerySettings());
+    if (traceIdsRows.isEmpty()) {
+      return List.of();
     }
 
-    sql.append(" FROM ").append(database).append(".spans s");
+    Set<TraceKey> traceIds = traceIdsRows.stream()
+      .map(row -> new TraceKey(row.getBigInteger("trace_id"), row.getBigInteger("trace_id_high")))
+      .collect(Collectors.toSet());
+
+    Map<String, Object> sqlParams = new HashMap<>();
+    sqlParams.put("traceIds", traceIds);
+    sqlParams.put("startTimeMicros", startTimeMicros);
+    sqlParams.put("endTimeMicros", endTsMicros);
+    StringBuilder sql = new StringBuilder("""
+      SELECT s.trace_id, s.span_id, s.name, s.kind, s.duration, s.status_code,
+      s.local_endpoint_service_name, s.local_endpoint_ipv4, s.local_endpoint_ipv6, s.local_endpoint_port,
+      s.remote_endpoint_service_name, s.remote_endpoint_ipv4, s.remote_endpoint_ipv6, s.remote_endpoint_port,
+      s.trace_id_high, s.parent_id, s.timestamp, s.tags, s.annotations, s.shared, s.debug
+      """);
+
+    if (includeSpanStatistics) {
+      sql.append("""
+        , stats.median_duration AS median_duration
+        , stats.average_duration AS average_duration
+        , stats.p50 AS p50
+        , stats.p95 AS p95
+        , stats.p99 AS p99
+        , stats.success_count AS success_count
+        , stats.error_count AS error_count
+        , stats.total_count AS total_count
+      """);
+    }
+
+    sql.append(" FROM ").append(database).append(".spans s ");
 
     if (includeSpanStatistics) {
       sql.append(ClickHouseResultMapper.getStatisticsJoinFragment(database, request.serviceName()));
       if (request.serviceName() != null) {
-        queryParams.put("statsServiceName", request.serviceName().toLowerCase(java.util.Locale.ROOT));
+        sqlParams.put("statsServiceName", request.serviceName().toLowerCase(java.util.Locale.ROOT));
       }
     }
 
-    sql.append(" WHERE s.trace_id IN (").append(inner).append(")")
-      .append(" LIMIT ").append((long) request.limit() * maxSpansLimitMultiplier);
+    sql.append("""
+      WHERE (s.trace_id, s.trace_id_high) IN ({traceIds:Array(Tuple(UInt64, UInt64))})
+      AND timestamp >= fromUnixTimestamp64Micro({startTimeMicros:Int64})
+      AND timestamp <= fromUnixTimestamp64Micro({endTimeMicros:Int64})
+      LIMIT
+      """)
+      .append((long) request.limit() * maxSpansLimitMultiplier)
+      .append(" SETTINGS max_threads = 2;");
 
-    List<GenericRecord> rows = client.queryAll(sql.toString(), queryParams, newQuerySettings());
+    List<GenericRecord> rows = client.queryAll(sql.toString(), sqlParams, newQuerySettings());
     List<Span> spans = ClickHouseResultMapper.toSpans(rows, includeSpanStatistics);
     return ClickHouseResultMapper.groupSpansByTraceId(spans);
   }
@@ -125,5 +153,15 @@ public final class GetTracesCall extends ClickHouseCall<List<List<Span>>> {
   @Override
   public String toString() {
     return "GetTracesCall{limit=" + request.limit() + "}";
+  }
+
+  record TraceKey(
+    BigInteger traceId,
+    BigInteger traceIdHigh
+  ) {
+    @Override
+    public String toString() {
+      return "(" + traceId + ", " + traceIdHigh + ")";
+    }
   }
 }

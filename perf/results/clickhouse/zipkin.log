@@ -25,8 +25,8 @@
      / /_ | ||  __/| . \ | || |\  |
     |____|___|_|   |_|\_\___|_| \_|
 
-:: version 3.6.0-SNAPSHOT :: commit e938f24 ::
+:: version 3.6.0-SNAPSHOT :: commit c39ba1d ::
 
-2026-05-23T14:55:51.427+03:00  WARN [/] 21508 --- [           main] i.m.p.PrometheusMeterRegistry            : A MeterFilter is being configured after a Meter has been registered to this registry. All MeterFilters should be configured before any Meters are registered. If that is not possible or you have a use case where it should be allowed, let the Micrometer maintainers know at https://github.com/micrometer-metrics/micrometer/issues/4920. Enable DEBUG level logging on this logger to see a stack trace of the call configuring this MeterFilter.
-2026-05-23T14:55:51.553+03:00  INFO [/] 21508 --- [oss-http-*:9411] c.l.a.s.Server                           : Serving HTTP at /[0:0:0:0:0:0:0:0]:9411 - http://127.0.0.1:9411/
-2026-05-23T14:59:45.946+03:00  INFO [/] 21508 --- [ionShutdownHook] z.s.c.ClickHouseSpanConsumer             : ClickHouseSpanConsumer shut down successfully
+2026-05-24T15:26:45.263+03:00  WARN [/] 39493 --- [           main] i.m.p.PrometheusMeterRegistry            : A MeterFilter is being configured after a Meter has been registered to this registry. All MeterFilters should be configured before any Meters are registered. If that is not possible or you have a use case where it should be allowed, let the Micrometer maintainers know at https://github.com/micrometer-metrics/micrometer/issues/4920. Enable DEBUG level logging on this logger to see a stack trace of the call configuring this MeterFilter.
+2026-05-24T15:26:45.388+03:00  INFO [/] 39493 --- [oss-http-*:9411] c.l.a.s.Server                           : Serving HTTP at /[0:0:0:0:0:0:0:0]:9411 - http://127.0.0.1:9411/
+2026-05-24T15:28:40.738+03:00  INFO [/] 39493 --- [ionShutdownHook] z.s.c.ClickHouseSpanConsumer             : ClickHouseSpanConsumer shut down successfully

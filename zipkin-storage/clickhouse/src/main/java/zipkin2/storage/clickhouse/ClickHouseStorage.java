@@ -1,6 +1,8 @@
 package zipkin2.storage.clickhouse;
 
 import com.clickhouse.client.api.Client;
+
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -59,27 +61,6 @@ public class ClickHouseStorage extends StorageComponent {
       Schema.ensure(this);
     }
     registerTables();
-  }
-
-  ClickHouseStorage(Builder b, Client client) {
-    this.client = client;
-    this.database = b.database;
-    this.clusterName = b.clusterName;
-    this.strictTraceId = b.strictTraceId;
-    this.autocompleteKeys = b.autocompleteKeys;
-    this.autocompleteTtl = b.autocompleteTtl;
-    this.autocompleteCardinality = b.autocompleteCardinality;
-    this.maxSpansLimitMultiplier = b.maxSpansLimitMultiplier;
-    this.includeSpanStatistics = b.includeSpanStatistics;
-    this.autocompleteTagsCache = new AutocompleteTagsCache(
-      b.autocompleteTtl, b.autocompleteCardinality, b.autocompleteKeys
-    );
-    this.clickHouseSpanStore = new ClickHouseSpanStore(client, b.database, b.strictTraceId, b.maxSpansLimitMultiplier, b.includeSpanStatistics);
-    this.spanConsumer = new ClickHouseSpanConsumer(
-      client, b.strictTraceId, b.autocompleteKeys, this.autocompleteTagsCache,
-      b.batchSize, b.autoFlushIntervalMs
-    );
-    this.ensureScheme = false;
   }
 
   @Override
@@ -166,7 +147,14 @@ public class ClickHouseStorage extends StorageComponent {
     Client.Builder clientBuilder = new Client.Builder()
       .setUsername(b.username)
       .setPassword(b.password)
-      .setDefaultDatabase(b.database);
+      .setDefaultDatabase(b.database)
+      .compressServerResponse(false)
+      .compressClientRequest(false)
+      .setLZ4UncompressedBufferSize(1048576)
+      .setSocketRcvbuf(1_000_000)
+      .setClientNetworkBufferSize(1_000_000)
+      .setExecutionTimeout(500, ChronoUnit.MILLIS)
+      .setMaxConnections(10);
 
     if (!b.clusterNodes.isEmpty()) {
       for (String endpoint : b.clusterNodes) {
@@ -200,7 +188,7 @@ public class ClickHouseStorage extends StorageComponent {
     private int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
     private int autocompleteCardinality = 5 * 4000;
     private int maxSpansLimitMultiplier = 100;
-    private boolean includeSpanStatistics = true;
+    private boolean includeSpanStatistics = false;
     private int batchSize = 10000;
     private int autoFlushIntervalMs = 5000;
 

@@ -20,7 +20,8 @@ import java.util.*;
 
 public final class ClickHouseResultMapper {
 
-  private ClickHouseResultMapper() {}
+  private ClickHouseResultMapper() {
+  }
 
   // Lookup table for hex encoding — no String.format, no varargs, no boxing.
   private static final char[] HEX = "0123456789abcdef".toCharArray();
@@ -34,12 +35,6 @@ public final class ClickHouseResultMapper {
     return new String(buf);
   }
 
-  /**
-   * Reads a UInt64 column as a Java long (raw 64-bit two's complement).
-   * reader.getLong() throws ArithmeticException for values > Long.MAX_VALUE,
-   * so we go through readValue() which returns BigInteger, then take the low 64 bits.
-   * This is safe for hex encoding: the bit pattern is identical.
-   */
   private static long readUInt64(ClickHouseBinaryFormatReader reader, String col) {
     Object v = reader.readValue(col);
     if (v instanceof Long) return (Long) v;
@@ -56,43 +51,38 @@ public final class ClickHouseResultMapper {
 
   static String getStatisticsJoinFragment(String database, String serviceName) {
     StringBuilder sb = new StringBuilder();
-    sb.append(" LEFT JOIN (SELECT span_name, span_kind, service_name, ")
-      .append("medianMerge(median_duration) AS median_duration, ")
-      .append("avgMerge(average_duration) AS average_duration, ")
-      .append("quantileMerge(p50) AS p50, ")
-      .append("quantileMerge(p95) AS p95, ")
-      .append("quantileMerge(p99) AS p99, ")
-      .append("sumMerge(success_count) AS success_count, ")
-      .append("sumMerge(error_count) AS error_count, ")
-      .append("sumMerge(total_count) AS total_count ")
+    sb.append("""
+          LEFT JOIN (SELECT span_name, span_kind, service_name,
+          medianMerge(median_duration) AS median_duration,
+          avgMerge(average_duration) AS average_duration,
+          quantileMerge(p50) AS p50,
+          quantileMerge(p95) AS p95,
+          quantileMerge(p99) AS p99,
+          sumMerge(success_count) AS success_count,
+          sumMerge(error_count) AS error_count,
+          sumMerge(total_count) AS total_count
+        """)
       .append("FROM ").append(database).append(".spans_aggregate_stats");
     if (serviceName != null) {
       sb.append(" WHERE service_name = {statsServiceName:String}");
     }
-    sb.append(" GROUP BY span_name, span_kind, service_name) AS stats ")
-      .append("ON s.name = stats.span_name AND s.kind = stats.span_kind ")
-      .append("AND s.local_endpoint_service_name = stats.service_name");
+    sb.append("""
+      GROUP BY span_name, span_kind, service_name) AS stats ")
+      ON s.name = stats.span_name AND s.kind = stats.span_kind
+      AND s.local_endpoint_service_name = stats.service_name
+      """);
     return sb.toString();
   }
 
-  // ── hot path ────────────────────────────────────────────────────────────────
 
-  /**
-   * Reads the current row from the typed reader.
-   * Called after reader.next() has advanced the cursor.
-   * Uses typed getters (getLong, getString, getInstant, …) instead of the
-   * Map<String,Object> returned by next() — eliminates HashMap lookup overhead
-   * and avoids BigInteger creation for UInt64 columns where possible.
-   */
   private static Span toSpanFromReader(ClickHouseBinaryFormatReader reader,
                                        boolean includeSpanStatistics) {
     Span.Builder builder = Span.newBuilder();
 
     // UInt64 — readUInt64() extracts raw 64 bits without ArithmeticException.
-    long traceIdLow  = readUInt64(reader, "trace_id");
+    long traceIdLow = readUInt64(reader, "trace_id");
     long traceIdHigh = readUInt64(reader, "trace_id_high");
-    builder.traceId(traceIdHigh == 0L ? toHex16(traceIdLow)
-                                      : toHex16(traceIdHigh) + toHex16(traceIdLow));
+    builder.traceId(traceIdHigh, traceIdLow);
 
     builder.id(Long.toHexString(readUInt64(reader, "span_id")));
 
@@ -106,7 +96,7 @@ public final class ClickHouseResultMapper {
     String localSvc = reader.getString("local_endpoint_service_name");
     Inet4Address localIpv4 = reader.getInet4Address("local_endpoint_ipv4");
     Inet6Address localIpv6 = reader.getInet6Address("local_endpoint_ipv6");
-    Integer localPort      = reader.getInteger("local_endpoint_port");
+    Integer localPort = reader.getInteger("local_endpoint_port");
     if (localSvc != null || localIpv4 != null || localIpv6 != null || localPort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (localSvc != null && !localSvc.isEmpty()) ep.serviceName(localSvc);
@@ -120,7 +110,7 @@ public final class ClickHouseResultMapper {
     String remoteSvc = reader.getString("remote_endpoint_service_name");
     Inet4Address remoteIpv4 = reader.getInet4Address("remote_endpoint_ipv4");
     Inet6Address remoteIpv6 = reader.getInet6Address("remote_endpoint_ipv6");
-    Integer remotePort      = reader.getInteger("remote_endpoint_port");
+    Integer remotePort = reader.getInteger("remote_endpoint_port");
     if (remoteSvc != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (remoteSvc != null && !remoteSvc.isEmpty()) ep.serviceName(remoteSvc);
@@ -149,28 +139,28 @@ public final class ClickHouseResultMapper {
     if (duration > 0) builder.duration(duration);
 
     if (includeSpanStatistics) {
-      BigDecimal medianDuration  = reader.getBigDecimal("median_duration");
+      BigDecimal medianDuration = reader.getBigDecimal("median_duration");
       BigDecimal averageDuration = reader.getBigDecimal("average_duration");
-      BigDecimal p50             = reader.getBigDecimal("p50");
-      BigDecimal p95             = reader.getBigDecimal("p95");
-      BigDecimal p99             = reader.getBigDecimal("p99");
+      BigDecimal p50 = reader.getBigDecimal("p50");
+      BigDecimal p95 = reader.getBigDecimal("p95");
+      BigDecimal p99 = reader.getBigDecimal("p99");
       Long successCount = readUInt64Nullable(reader, "success_count");
-      Long errorCount   = readUInt64Nullable(reader, "error_count");
-      Long totalCount   = readUInt64Nullable(reader, "total_count");
+      Long errorCount = readUInt64Nullable(reader, "error_count");
+      Long totalCount = readUInt64Nullable(reader, "total_count");
 
       if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
-          p99 != null || successCount != null || errorCount != null || totalCount != null) {
+        p99 != null || successCount != null || errorCount != null || totalCount != null) {
         builder.statistics(new SpanStatistics(
           spanName,
           spanKind != null ? spanKind : "",
-          medianDuration  != null ? medianDuration  : BigDecimal.ZERO,
+          medianDuration != null ? medianDuration : BigDecimal.ZERO,
           averageDuration != null ? averageDuration : BigDecimal.ZERO,
           p50 != null ? p50 : BigDecimal.ZERO,
           p95 != null ? p95 : BigDecimal.ZERO,
           p99 != null ? p99 : BigDecimal.ZERO,
           successCount != null ? successCount : 0L,
-          errorCount   != null ? errorCount   : 0L,
-          totalCount   != null ? totalCount   : 0L
+          errorCount != null ? errorCount : 0L,
+          totalCount != null ? totalCount : 0L
         ));
       }
     }
@@ -221,9 +211,9 @@ public final class ClickHouseResultMapper {
     builder.name((String) record.get("name"));
 
     String localServiceName = (String) record.get("local_endpoint_service_name");
-    Inet4Address localIpv4  = (Inet4Address) record.get("local_endpoint_ipv4");
-    Inet6Address localIpv6  = (Inet6Address) record.get("local_endpoint_ipv6");
-    Integer localPort       = getInteger(record.get("local_endpoint_port"));
+    Inet4Address localIpv4 = (Inet4Address) record.get("local_endpoint_ipv4");
+    Inet6Address localIpv6 = (Inet6Address) record.get("local_endpoint_ipv6");
+    Integer localPort = getInteger(record.get("local_endpoint_port"));
     if (localServiceName != null || localIpv4 != null || localIpv6 != null || localPort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (localServiceName != null && !localServiceName.isEmpty()) ep.serviceName(localServiceName);
@@ -234,9 +224,9 @@ public final class ClickHouseResultMapper {
     }
 
     String remoteServiceName = (String) record.get("remote_endpoint_service_name");
-    Inet4Address remoteIpv4  = (Inet4Address) record.get("remote_endpoint_ipv4");
-    Inet6Address remoteIpv6  = (Inet6Address) record.get("remote_endpoint_ipv6");
-    Integer remotePort       = getInteger(record.get("remote_endpoint_port"));
+    Inet4Address remoteIpv4 = (Inet4Address) record.get("remote_endpoint_ipv4");
+    Inet6Address remoteIpv6 = (Inet6Address) record.get("remote_endpoint_ipv6");
+    Integer remotePort = getInteger(record.get("remote_endpoint_port"));
     if (remoteServiceName != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (remoteServiceName != null && !remoteServiceName.isEmpty()) ep.serviceName(remoteServiceName);
@@ -261,29 +251,29 @@ public final class ClickHouseResultMapper {
     if (duration != null && duration > 0) builder.duration(duration);
 
     if (includeSpanStatistics) {
-      BigDecimal medianDuration  = getBigDecimal(record.get("median_duration"));
+      BigDecimal medianDuration = getBigDecimal(record.get("median_duration"));
       BigDecimal averageDuration = getBigDecimal(record.get("average_duration"));
       BigDecimal p50 = getBigDecimal(record.get("p50"));
       BigDecimal p95 = getBigDecimal(record.get("p95"));
       BigDecimal p99 = getBigDecimal(record.get("p99"));
       Long successCount = getLong(record.get("success_count"));
-      Long errorCount   = getLong(record.get("error_count"));
-      Long totalCount   = getLong(record.get("total_count"));
+      Long errorCount = getLong(record.get("error_count"));
+      Long totalCount = getLong(record.get("total_count"));
 
       if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
-          p99 != null || successCount != null || errorCount != null || totalCount != null) {
+        p99 != null || successCount != null || errorCount != null || totalCount != null) {
         String spanName = (String) record.get("name");
         builder.statistics(new SpanStatistics(
           spanName,
           spanKind != null ? spanKind : "",
-          medianDuration  != null ? medianDuration  : BigDecimal.ZERO,
+          medianDuration != null ? medianDuration : BigDecimal.ZERO,
           averageDuration != null ? averageDuration : BigDecimal.ZERO,
           p50 != null ? p50 : BigDecimal.ZERO,
           p95 != null ? p95 : BigDecimal.ZERO,
           p99 != null ? p99 : BigDecimal.ZERO,
           successCount != null ? successCount : 0L,
-          errorCount   != null ? errorCount   : 0L,
-          totalCount   != null ? totalCount   : 0L
+          errorCount != null ? errorCount : 0L,
+          totalCount != null ? totalCount : 0L
         ));
       }
     }
@@ -311,11 +301,11 @@ public final class ClickHouseResultMapper {
   }
 
   // ── GenericRecord path (used by queryAll) ───────────────────────────────────
-static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
+  static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     return rows.stream()
       .map(row -> row.getBigInteger("trace_id"))
       .toList();
-}
+  }
 
   static List<Span> toSpans(List<GenericRecord> rows, boolean includeSpanStatistics) {
     List<Span> spans = new ArrayList<>(rows.size());
@@ -330,56 +320,77 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     return v != null ? v.longValue() : 0L;
   }
 
+  private static Long readUInt64Nullable(GenericRecord row, String col) {
+    if (!row.hasValue(col)) return null;
+    BigInteger v = row.getBigInteger(col);
+    return v != null ? v.longValue() : 0L;
+  }
+
   private static Span toSpanFromGenericRecord(GenericRecord row, boolean includeSpanStatistics) {
     Span.Builder builder = Span.newBuilder();
 
-    long traceIdLow  = readUInt64(row, "trace_id");
+    long traceIdLow = readUInt64(row, "trace_id");
     long traceIdHigh = readUInt64(row, "trace_id_high");
-    builder.traceId(traceIdHigh == 0L ? toHex16(traceIdLow)
-                                      : toHex16(traceIdHigh) + toHex16(traceIdLow));
+    builder.traceId(traceIdHigh, traceIdLow);
 
-    builder.id(Long.toHexString(readUInt64(row, "span_id")));
+    builder.id(readUInt64(row, "span_id"));
 
-    long parentId = readUInt64(row, "parent_id");
-    if (parentId != 0L) builder.parentId(Long.toHexString(parentId));
+    Long parentId = readUInt64Nullable(row, "parent_id");
+    if (parentId != null) builder.parentId(parentId);
 
     String spanName = row.getString("name");
     builder.name(spanName);
 
-    String localSvc  = row.getString("local_endpoint_service_name");
-    Inet4Address localIpv4 = row.getInet4Address("local_endpoint_ipv4");
-    Inet6Address localIpv6 = row.getInet6Address("local_endpoint_ipv6");
-    Integer localPort      = row.getInteger("local_endpoint_port");
-    if (localSvc != null || localIpv4 != null || localIpv6 != null || localPort != null) {
-      Endpoint.Builder ep = Endpoint.newBuilder();
-      if (localSvc != null && !localSvc.isEmpty()) ep.serviceName(localSvc);
-      if (localIpv4 != null) ep.parseIp(localIpv4);
-      if (localIpv6 != null) ep.parseIp(localIpv6);
-      if (localPort != null) ep.port(localPort);
-      builder.localEndpoint(ep.build());
-    }
+    String localSvc = row.hasValue("local_endpoint_service_name")
+      ? row.getString("local_endpoint_service_name")
+      : null;
+    Inet4Address localIpv4 = row.hasValue("local_endpoint_ipv4")
+      ? row.getInet4Address("local_endpoint_ipv4")
+      : null;
+    Inet6Address localIpv6 = row.hasValue("local_endpoint_ipv6")
+      ? row.getInet6Address("local_endpoint_ipv6")
+      : null;
+    Integer localPort = row.hasValue("local_endpoint_port")
+      ? row.getInteger("local_endpoint_port")
+      : null;
 
-    String remoteSvc  = row.getString("remote_endpoint_service_name");
-    Inet4Address remoteIpv4 = row.getInet4Address("remote_endpoint_ipv4");
-    Inet6Address remoteIpv6 = row.getInet6Address("remote_endpoint_ipv6");
-    Integer remotePort      = row.getInteger("remote_endpoint_port");
-    if (remoteSvc != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
-      Endpoint.Builder ep = Endpoint.newBuilder();
-      if (remoteSvc != null && !remoteSvc.isEmpty()) ep.serviceName(remoteSvc);
-      if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
-      if (remoteIpv6 != null) ep.parseIp(remoteIpv6);
-      if (remotePort != null) ep.port(remotePort);
-      builder.remoteEndpoint(ep.build());
-    }
+    builder.localEndpoint(Endpoint.newBuilder()
+      .ip(localIpv6 != null ? localIpv6 : localIpv4)
+      .serviceName(localSvc)
+      .port(localPort)
+      .build());
+
+    String remoteSvc = row.hasValue("remote_endpoint_service_name")
+      ? row.getString("remote_endpoint_service_name")
+      : null;
+    Inet4Address remoteIpv4 = row.hasValue("remote_endpoint_ipv4")
+      ? row.getInet4Address("remote_endpoint_ipv4")
+      : null;
+    Inet6Address remoteIpv6 = row.hasValue("remote_endpoint_ipv6")
+      ? row.getInet6Address("remote_endpoint_ipv6")
+      : null;
+    Integer remotePort = row.hasValue("remote_endpoint_port")
+      ? row.getInteger("remote_endpoint_port")
+      : null;
+
+    builder.remoteEndpoint(Endpoint.newBuilder()
+        .ip(remoteIpv6 != null ? remoteIpv6 : remoteIpv4)
+        .serviceName(remoteSvc)
+        .port(remotePort)
+      .build());
 
     String spanKind = row.getString("kind");
     if (spanKind != null && !spanKind.isEmpty()) {
-      try { builder.kind(Span.Kind.valueOf(spanKind)); } catch (IllegalArgumentException ignored) {}
+      try {
+        builder.kind(Span.Kind.valueOf(spanKind));
+      } catch (IllegalArgumentException ignored) {
+      }
     }
 
-    Instant ts = row.getInstant("timestamp");
-    if (ts != null) {
-      long tsMicros = ts.getEpochSecond() * 1_000_000L + ts.getNano() / 1_000L;
+    ZonedDateTime timestamp = row.getZonedDateTime("timestamp");
+    if (timestamp != null) {
+      Instant instant = timestamp.toInstant();
+      long tsMicros = instant.getEpochSecond() * 1_000_000L + timestamp.getNano() / 1_000L;
       if (tsMicros > 0) builder.timestamp(tsMicros);
     }
 
@@ -387,7 +398,7 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     if (duration > 0) builder.duration(duration);
 
     if (includeSpanStatistics) {
-      BigDecimal medianDuration  = row.getBigDecimal("median_duration");
+      BigDecimal medianDuration = row.getBigDecimal("median_duration");
       BigDecimal averageDuration = row.getBigDecimal("average_duration");
       BigDecimal p50 = row.getBigDecimal("p50");
       BigDecimal p95 = row.getBigDecimal("p95");
@@ -395,21 +406,21 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
       BigInteger successRaw = row.getBigInteger("success_count");
       Long successCount = successRaw != null ? successRaw.longValue() : null;
       BigInteger errorRaw = row.getBigInteger("error_count");
-      Long errorCount   = errorRaw != null ? errorRaw.longValue() : null;
+      Long errorCount = errorRaw != null ? errorRaw.longValue() : null;
       BigInteger totalRaw = row.getBigInteger("total_count");
-      Long totalCount   = totalRaw != null ? totalRaw.longValue() : null;
+      Long totalCount = totalRaw != null ? totalRaw.longValue() : null;
       if (medianDuration != null || averageDuration != null || p50 != null || p95 != null ||
-          p99 != null || successCount != null || errorCount != null || totalCount != null) {
+        p99 != null || successCount != null || errorCount != null || totalCount != null) {
         builder.statistics(new SpanStatistics(
           spanName, spanKind != null ? spanKind : "",
-          medianDuration  != null ? medianDuration  : BigDecimal.ZERO,
+          medianDuration != null ? medianDuration : BigDecimal.ZERO,
           averageDuration != null ? averageDuration : BigDecimal.ZERO,
           p50 != null ? p50 : BigDecimal.ZERO,
           p95 != null ? p95 : BigDecimal.ZERO,
           p99 != null ? p99 : BigDecimal.ZERO,
           successCount != null ? successCount : 0L,
-          errorCount   != null ? errorCount   : 0L,
-          totalCount   != null ? totalCount   : 0L
+          errorCount != null ? errorCount : 0L,
+          totalCount != null ? totalCount : 0L
         ));
       }
     }
@@ -477,7 +488,7 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     try (ClickHouseBinaryFormatReader reader = client.newBinaryFormatReader(response)) {
       while (reader.hasNext()) {
         reader.next();
-        String child  = reader.getString("local_service_name");
+        String child = reader.getString("local_service_name");
         String parent = reader.getString("remote_service_name");
         if (parent != null && !parent.isEmpty() && child != null && !child.isEmpty()) {
           links.add(DependencyLink.newBuilder().parent(parent).child(child).callCount(1).build());
@@ -521,8 +532,8 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     if (low == null) low = BigInteger.ZERO;
     if (high == null) high = BigInteger.ZERO;
     return high.signum() == 0
-        ? toHex16(low.longValue())
-        : toHex16(high.longValue()) + toHex16(low.longValue());
+      ? toHex16(low.longValue())
+      : toHex16(high.longValue()) + toHex16(low.longValue());
   }
 
   private static Long getLong(Object value) {
@@ -539,7 +550,11 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
       return i.getEpochSecond() * 1_000_000L + i.getNano() / 1_000L;
     }
     if (value instanceof String) {
-      try { return Long.parseLong((String) value); } catch (NumberFormatException e) { return null; }
+      try {
+        return Long.parseLong((String) value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
     }
     return null;
   }
@@ -550,7 +565,11 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     if (value instanceof Long) return BigInteger.valueOf((Long) value);
     if (value instanceof Integer) return BigInteger.valueOf((Integer) value);
     if (value instanceof String) {
-      try { return new BigInteger((String) value); } catch (NumberFormatException e) { return null; }
+      try {
+        return new BigInteger((String) value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
     }
     return null;
   }
@@ -564,7 +583,11 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     if (value instanceof Integer) return BigDecimal.valueOf((Integer) value);
     if (value instanceof BigInteger) return new BigDecimal((BigInteger) value);
     if (value instanceof String) {
-      try { return new BigDecimal((String) value); } catch (NumberFormatException e) { return null; }
+      try {
+        return new BigDecimal((String) value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
     }
     return null;
   }
@@ -574,7 +597,11 @@ static List<BigInteger> toTraceIds(List<GenericRecord> rows) {
     if (value instanceof Integer) return (Integer) value;
     if (value instanceof Long) return ((Long) value).intValue();
     if (value instanceof String) {
-      try { return Integer.parseInt((String) value); } catch (NumberFormatException e) { return null; }
+      try {
+        return Integer.parseInt((String) value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
     }
     return null;
   }

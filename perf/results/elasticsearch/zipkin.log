@@ -25,72 +25,7 @@
      / /_ | ||  __/| . \ | || |\  |
     |____|___|_|   |_|\_\___|_| \_|
 
-:: version 3.6.0-SNAPSHOT :: commit e938f24 ::
+:: version 3.6.0-SNAPSHOT :: commit c39ba1d ::
 
-2026-05-14T20:42:20.307+03:00  WARN [/] 7919 --- [           main] i.m.p.PrometheusMeterRegistry            : A MeterFilter is being configured after a Meter has been registered to this registry. All MeterFilters should be configured before any Meters are registered. If that is not possible or you have a use case where it should be allowed, let the Micrometer maintainers know at https://github.com/micrometer-metrics/micrometer/issues/4920. Enable DEBUG level logging on this logger to see a stack trace of the call configuring this MeterFilter.
-2026-05-14T20:42:20.455+03:00  INFO [/] 7919 --- [oss-http-*:9411] c.l.a.s.Server                           : Serving HTTP at /[0:0:0:0:0:0:0:0]:9411 - http://127.0.0.1:9411/
-2026-05-14T20:42:37.370+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:38.425+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:39.527+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:40.596+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:41.616+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:42.623+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:43.628+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:44.645+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:45.727+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-2026-05-14T20:42:46.745+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-#
-# A fatal error has been detected by the Java Runtime Environment:
-#
-#  SIGSEGV (0xb) at pc=0x0000000101e55084, pid=7919, tid=25603
-#
-# JRE version: OpenJDK Runtime Environment Corretto-21.0.4.7.1 (21.0.4+7) (build 21.0.4+7-LTS)
-# Java VM: OpenJDK 64-Bit Server VM Corretto-21.0.4.7.1 (21.0.4+7-LTS, mixed mode, sharing, tiered, compressed oops, compressed class ptrs, g1 gc, bsd-aarch64)
-# Problematic frame:
-# V  [libjvm.dylib+0x4a1084]  PhaseChaitin::interfere_with_live(unsigned int, IndexSet*)+0x174
-#
-# No core dump will be written. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
-#
-# An error report file with more information is saved as:
-# /Users/romankuryshev/IDEA Projects/ITMO/vkr/zipkin/perf/hs_err_pid7919.log
-2026-05-14T20:42:48.428+03:00  WARN [/] 7919 --- [rker-kqueue-2-4] i.n.c.k.KQueueIoHandler                  : Unexpected exception in the selector loop.
-
-io.netty.channel.unix.Errors$NativeIoException: kevent(..) failed: No such file or directory
-
-#
-# Compiler replay data is saved as:
-# /Users/romankuryshev/IDEA Projects/ITMO/vkr/zipkin/perf/replay_pid7919.log
-#
-# If you would like to submit a bug report, please visit:
-#   https://github.com/corretto/corretto-21/issues/
-#
+2026-05-23T22:26:25.165+03:00  WARN [/] 18848 --- [           main] i.m.p.PrometheusMeterRegistry            : A MeterFilter is being configured after a Meter has been registered to this registry. All MeterFilters should be configured before any Meters are registered. If that is not possible or you have a use case where it should be allowed, let the Micrometer maintainers know at https://github.com/micrometer-metrics/micrometer/issues/4920. Enable DEBUG level logging on this logger to see a stack trace of the call configuring this MeterFilter.
+2026-05-23T22:26:25.339+03:00  INFO [/] 18848 --- [oss-http-*:9411] c.l.a.s.Server                           : Serving HTTP at /[0:0:0:0:0:0:0:0]:9411 - http://127.0.0.1:9411/

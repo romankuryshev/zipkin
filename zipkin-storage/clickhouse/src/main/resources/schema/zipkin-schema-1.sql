@@ -18,27 +18,27 @@ CREATE TABLE IF NOT EXISTS dependencies
 
 CREATE TABLE IF NOT EXISTS spans
 (
-  trace_id                     UInt64,
-  trace_id_high                UInt64 DEFAULT 0,
-  parent_id                    Nullable(UInt64),
-  span_id                      UInt64,
-  kind                         LowCardinality(String),
-  name                         LowCardinality(String),
-  timestamp                    DATETIME64(6),
-  duration                     UInt64,
-  local_endpoint_service_name  LowCardinality(String),
-  local_endpoint_ipv4          Nullable(IPv4),
-  local_endpoint_ipv6          Nullable(IPv6),
-  local_endpoint_port          Nullable(UInt16),
-  remote_endpoint_service_name LowCardinality(String),
-  remote_endpoint_ipv4         Nullable(IPv4),
-  remote_endpoint_ipv6         Nullable(IPv6),
-  remote_endpoint_port         Nullable(UInt16),
-  annotations                  Array(Tuple(timestamp DateTime64(6), value String)),
-  tags                         Map(String, String),
-  status_code                  LowCardinality(String),
-  shared                       UInt8  DEFAULT 0,
-  debug                        UInt8  DEFAULT 0
+  trace_id                     UInt64 CODEC(T64, ZSTD(1)),
+  trace_id_high                UInt64 DEFAULT 0 CODEC(ZSTD(1)),
+  parent_id                    UInt64 DEFAULT 0 CODEC(ZSTD(1)),
+  span_id                      UInt64 CODEC(T64, ZSTD(1)),
+  kind                         LowCardinality(String) CODEC(ZSTD(1)),
+  name                         LowCardinality(String) CODEC(ZSTD(1)),
+  timestamp                    DATETIME64(6) CODEC(Delta(8), ZSTD(1)),
+  duration                     UInt64 CODEC(T64, ZSTD(1)),
+  local_endpoint_service_name  LowCardinality(String) CODEC(ZSTD(1)),
+  local_endpoint_ipv4          IPv4   DEFAULT toIPv4('0.0.0.0') CODEC(Delta(4), ZSTD(1)),
+  local_endpoint_ipv6          IPv6   DEFAULT toIPv6('::') CODEC(ZSTD(1)),
+  local_endpoint_port          UInt16 DEFAULT 0 CODEC(ZSTD(1)),
+  remote_endpoint_service_name LowCardinality(String) CODEC(ZSTD(1)),
+  remote_endpoint_ipv4         IPv4   DEFAULT toIPv4('0.0.0.0') CODEC(Delta(4), ZSTD(1)),
+  remote_endpoint_ipv6         IPv6   DEFAULT toIPv6('::') CODEC(ZSTD(1)),
+  remote_endpoint_port         UInt16 DEFAULT 0 CODEC(ZSTD(1)),
+  annotations                  Array (Tuple(timestamp DateTime64(6), value String)) CODEC(ZSTD(3)),
+  tags                         Map(String, String) CODEC(ZSTD(3)),
+  status_code                  LowCardinality(String) CODEC(ZSTD(1)),
+  shared                       UInt8  DEFAULT 0 CODEC(ZSTD(1)),
+  debug                        UInt8  DEFAULT 0 CODEC(ZSTD(1))
 ) ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
     ORDER BY (trace_id, trace_id_high, timestamp)
@@ -51,7 +51,7 @@ ALTER TABLE spans
     );
 
 ALTER TABLE spans
-  ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1;
+  ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 4;
 
 CREATE TABLE IF NOT EXISTS spans_aggregate_stats
 (
