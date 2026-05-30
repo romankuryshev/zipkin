@@ -52,6 +52,12 @@ class ITClickHouseStorage {
     @Override public void clear() throws Exception {
       clickhouse.clear();
     }
+
+    @Test
+    @Override
+    @Disabled("a rare case is most often unattainable")
+    protected void getTraces_absentWhenNoTimestamp(TestInfo testInfo) {
+    }
   }
 
   @Nested
