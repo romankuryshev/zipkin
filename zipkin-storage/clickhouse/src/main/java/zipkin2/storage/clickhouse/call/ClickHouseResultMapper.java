@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -51,26 +52,22 @@ public final class ClickHouseResultMapper {
 
   static String getStatisticsJoinFragment(String database, String serviceName) {
     StringBuilder sb = new StringBuilder();
-    sb.append("""
-          LEFT JOIN (SELECT span_name, span_kind, service_name,
-          medianMerge(median_duration) AS median_duration,
-          avgMerge(average_duration) AS average_duration,
-          quantileMerge(p50) AS p50,
-          quantileMerge(p95) AS p95,
-          quantileMerge(p99) AS p99,
-          sumMerge(success_count) AS success_count,
-          sumMerge(error_count) AS error_count,
-          sumMerge(total_count) AS total_count
-        """)
-      .append("FROM ").append(database).append(".spans_aggregate_stats");
+    sb.append(" LEFT JOIN (SELECT span_name, span_kind, service_name,")
+      .append(" medianMerge(median_duration) AS median_duration,")
+      .append(" avgMerge(average_duration) AS average_duration,")
+      .append(" quantileMerge(p50) AS p50,")
+      .append(" quantileMerge(p95) AS p95,")
+      .append(" quantileMerge(p99) AS p99,")
+      .append(" sumMerge(success_count) AS success_count,")
+      .append(" sumMerge(error_count) AS error_count,")
+      .append(" sumMerge(total_count) AS total_count")
+      .append(" FROM ").append(database).append(".spans_aggregate_stats");
     if (serviceName != null) {
       sb.append(" WHERE service_name = {statsServiceName:String}");
     }
-    sb.append("""
-      GROUP BY span_name, span_kind, service_name) AS stats ")
-      ON s.name = stats.span_name AND s.kind = stats.span_kind
-      AND s.local_endpoint_service_name = stats.service_name
-      """);
+    sb.append(" GROUP BY span_name, span_kind, service_name) AS stats")
+      .append(" ON s.name = stats.span_name AND s.kind = stats.span_kind")
+      .append(" AND s.local_endpoint_service_name = stats.service_name ");
     return sb.toString();
   }
 
@@ -94,10 +91,10 @@ public final class ClickHouseResultMapper {
 
     // Local endpoint
     String localSvc = reader.getString("local_endpoint_service_name");
-    Inet4Address localIpv4 = reader.getInet4Address("local_endpoint_ipv4");
-    Inet6Address localIpv6 = reader.getInet6Address("local_endpoint_ipv6");
+    Inet4Address localIpv4 = nullIfAnyLocal(reader.getInet4Address("local_endpoint_ipv4"));
+    Inet6Address localIpv6 = nullIfAnyLocal(reader.getInet6Address("local_endpoint_ipv6"));
     Integer localPort = reader.getInteger("local_endpoint_port");
-    if (localSvc != null || localIpv4 != null || localIpv6 != null || localPort != null) {
+    if ((localSvc != null && !localSvc.isEmpty()) || localIpv4 != null || localIpv6 != null || localPort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (localSvc != null && !localSvc.isEmpty()) ep.serviceName(localSvc);
       if (localIpv4 != null) ep.parseIp(localIpv4);
@@ -108,10 +105,10 @@ public final class ClickHouseResultMapper {
 
     // Remote endpoint
     String remoteSvc = reader.getString("remote_endpoint_service_name");
-    Inet4Address remoteIpv4 = reader.getInet4Address("remote_endpoint_ipv4");
-    Inet6Address remoteIpv6 = reader.getInet6Address("remote_endpoint_ipv6");
+    Inet4Address remoteIpv4 = nullIfAnyLocal(reader.getInet4Address("remote_endpoint_ipv4"));
+    Inet6Address remoteIpv6 = nullIfAnyLocal(reader.getInet6Address("remote_endpoint_ipv6"));
     Integer remotePort = reader.getInteger("remote_endpoint_port");
-    if (remoteSvc != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
+    if ((remoteSvc != null && !remoteSvc.isEmpty()) || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (remoteSvc != null && !remoteSvc.isEmpty()) ep.serviceName(remoteSvc);
       if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
@@ -211,10 +208,10 @@ public final class ClickHouseResultMapper {
     builder.name((String) record.get("name"));
 
     String localServiceName = (String) record.get("local_endpoint_service_name");
-    Inet4Address localIpv4 = (Inet4Address) record.get("local_endpoint_ipv4");
-    Inet6Address localIpv6 = (Inet6Address) record.get("local_endpoint_ipv6");
+    Inet4Address localIpv4 = nullIfAnyLocal((Inet4Address) record.get("local_endpoint_ipv4"));
+    Inet6Address localIpv6 = nullIfAnyLocal((Inet6Address) record.get("local_endpoint_ipv6"));
     Integer localPort = getInteger(record.get("local_endpoint_port"));
-    if (localServiceName != null || localIpv4 != null || localIpv6 != null || localPort != null) {
+    if ((localServiceName != null && !localServiceName.isEmpty()) || localIpv4 != null || localIpv6 != null || localPort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (localServiceName != null && !localServiceName.isEmpty()) ep.serviceName(localServiceName);
       if (localIpv4 != null) ep.parseIp(localIpv4);
@@ -224,10 +221,10 @@ public final class ClickHouseResultMapper {
     }
 
     String remoteServiceName = (String) record.get("remote_endpoint_service_name");
-    Inet4Address remoteIpv4 = (Inet4Address) record.get("remote_endpoint_ipv4");
-    Inet6Address remoteIpv6 = (Inet6Address) record.get("remote_endpoint_ipv6");
+    Inet4Address remoteIpv4 = nullIfAnyLocal((Inet4Address) record.get("remote_endpoint_ipv4"));
+    Inet6Address remoteIpv6 = nullIfAnyLocal((Inet6Address) record.get("remote_endpoint_ipv6"));
     Integer remotePort = getInteger(record.get("remote_endpoint_port"));
-    if (remoteServiceName != null || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
+    if ((remoteServiceName != null && !remoteServiceName.isEmpty()) || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
       Endpoint.Builder ep = Endpoint.newBuilder();
       if (remoteServiceName != null && !remoteServiceName.isEmpty()) ep.serviceName(remoteServiceName);
       if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
@@ -344,40 +341,46 @@ public final class ClickHouseResultMapper {
     String localSvc = row.hasValue("local_endpoint_service_name")
       ? row.getString("local_endpoint_service_name")
       : null;
-    Inet4Address localIpv4 = row.hasValue("local_endpoint_ipv4")
+    Inet4Address localIpv4 = nullIfAnyLocal(row.hasValue("local_endpoint_ipv4")
       ? row.getInet4Address("local_endpoint_ipv4")
-      : null;
-    Inet6Address localIpv6 = row.hasValue("local_endpoint_ipv6")
+      : null);
+    Inet6Address localIpv6 = nullIfAnyLocal(row.hasValue("local_endpoint_ipv6")
       ? row.getInet6Address("local_endpoint_ipv6")
-      : null;
+      : null);
     Integer localPort = row.hasValue("local_endpoint_port")
       ? row.getInteger("local_endpoint_port")
       : null;
 
-    builder.localEndpoint(Endpoint.newBuilder()
-      .ip(localIpv6 != null ? localIpv6 : localIpv4)
-      .serviceName(localSvc)
-      .port(localPort)
-      .build());
+    if ((localSvc != null && !localSvc.isEmpty()) || localIpv4 != null || localIpv6 != null || localPort != null) {
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (localSvc != null && !localSvc.isEmpty()) ep.serviceName(localSvc);
+      if (localIpv4 != null) ep.parseIp(localIpv4);
+      if (localIpv6 != null) ep.parseIp(localIpv6);
+      if (localPort != null) ep.port(localPort);
+      builder.localEndpoint(ep.build());
+    }
 
     String remoteSvc = row.hasValue("remote_endpoint_service_name")
       ? row.getString("remote_endpoint_service_name")
       : null;
-    Inet4Address remoteIpv4 = row.hasValue("remote_endpoint_ipv4")
+    Inet4Address remoteIpv4 = nullIfAnyLocal(row.hasValue("remote_endpoint_ipv4")
       ? row.getInet4Address("remote_endpoint_ipv4")
-      : null;
-    Inet6Address remoteIpv6 = row.hasValue("remote_endpoint_ipv6")
+      : null);
+    Inet6Address remoteIpv6 = nullIfAnyLocal(row.hasValue("remote_endpoint_ipv6")
       ? row.getInet6Address("remote_endpoint_ipv6")
-      : null;
+      : null);
     Integer remotePort = row.hasValue("remote_endpoint_port")
       ? row.getInteger("remote_endpoint_port")
       : null;
 
-    builder.remoteEndpoint(Endpoint.newBuilder()
-        .ip(remoteIpv6 != null ? remoteIpv6 : remoteIpv4)
-        .serviceName(remoteSvc)
-        .port(remotePort)
-      .build());
+    if ((remoteSvc != null && !remoteSvc.isEmpty()) || remoteIpv4 != null || remoteIpv6 != null || remotePort != null) {
+      Endpoint.Builder ep = Endpoint.newBuilder();
+      if (remoteSvc != null && !remoteSvc.isEmpty()) ep.serviceName(remoteSvc);
+      if (remoteIpv4 != null) ep.parseIp(remoteIpv4);
+      if (remoteIpv6 != null) ep.parseIp(remoteIpv6);
+      if (remotePort != null) ep.port(remotePort);
+      builder.remoteEndpoint(ep.build());
+    }
 
     String spanKind = row.getString("kind");
     if (spanKind != null && !spanKind.isEmpty()) {
@@ -526,6 +529,10 @@ public final class ClickHouseResultMapper {
         }
       }
     }
+  }
+
+  private static <T extends InetAddress> T nullIfAnyLocal(T address) {
+    return (address != null && address.isAnyLocalAddress()) ? null : address;
   }
 
   private static String combineTraceId(BigInteger low, BigInteger high) {
