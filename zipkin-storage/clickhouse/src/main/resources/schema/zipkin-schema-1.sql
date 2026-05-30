@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS spans
   status_code                  LowCardinality(String) CODEC(ZSTD(1)),
   shared                       UInt8  DEFAULT 0 CODEC(ZSTD(1)),
   debug                        UInt8  DEFAULT 0 CODEC(ZSTD(1))
-) ENGINE = MergeTree()
+)   ENGINE = MergeTree()
     PARTITION BY toDate(timestamp)
     ORDER BY (trace_id, trace_id_high, timestamp)
     SETTINGS index_granularity = 1024;

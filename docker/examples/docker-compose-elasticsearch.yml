@@ -20,6 +20,8 @@ services:
       - xpack.security.enabled=false
     ports:
       - 9200:9200
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
 
   # Use Elasticsearch instead of in-memory storage
   zipkin:
@@ -46,3 +48,6 @@ services:
     depends_on:
       storage:
         condition: service_healthy
+
+volumes:
+  elasticsearch_data:
